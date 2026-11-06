@@ -394,6 +394,7 @@ namespace WorkableBoombox.Items
             if (isEquipped)
             {
                 UpdatePocketMode();
+                AnalyzeAudio();
                 CheckTrackProgression();
                 return;
             }
@@ -1178,14 +1179,17 @@ namespace WorkableBoombox.Items
 
         private void AnalyzeAudio()
         {
-            if (AudioSource == null || !AudioSource.isPlaying)
+            AudioSource activeSrc = (AudioSource != null && AudioSource.isPlaying) ? AudioSource :
+                                    (pocketAudioSource != null && pocketAudioSource.isPlaying) ? pocketAudioSource : null;
+
+            if (activeSrc == null)
             {
                 currentRMS = 0f;
                 smoothedRMS = Mathf.Lerp(smoothedRMS, 0f, Time.deltaTime * 15f);
                 return;
             }
 
-            AudioSource.GetOutputData(audioSamples, 0);
+            activeSrc.GetOutputData(audioSamples, 0);
 
             float sum = 0f;
             for (int i = 0; i < audioSamples.Length; i++)
@@ -1197,15 +1201,40 @@ namespace WorkableBoombox.Items
             smoothedRMS = Mathf.Lerp(smoothedRMS, currentRMS, Time.deltaTime * 25f);
         }
 
+        private void EnsureVisualReferences()
+        {
+            if (Light1 == null || Light2 == null)
+            {
+                Light[] allLights = GetComponentsInChildren<Light>(true);
+                if (allLights.Length > 0 && Light1 == null) Light1 = allLights[0];
+                if (allLights.Length > 1 && Light2 == null) Light2 = allLights[1];
+            }
+
+            if (Speaker1 == null || Speaker2 == null)
+            {
+                Transform[] transforms = GetComponentsInChildren<Transform>(true);
+                foreach (Transform t in transforms)
+                {
+                    if (t.name.IndexOf("speaker1", StringComparison.OrdinalIgnoreCase) >= 0 && Speaker1 == null) Speaker1 = t;
+                    else if (t.name.IndexOf("speaker2", StringComparison.OrdinalIgnoreCase) >= 0 && Speaker2 == null) Speaker2 = t;
+                }
+            }
+
+            if (Speaker1 != null && SpeakerRenderer1 == null) SpeakerRenderer1 = Speaker1.GetComponent<Renderer>();
+            if (Speaker2 != null && SpeakerRenderer2 == null) SpeakerRenderer2 = Speaker2.GetComponent<Renderer>();
+        }
+
         private void AnimateVisuals()
         {
-            if (IsBoomboxInPocket() || IsEquipTransitioning())
+            if (IsBoomboxInPocket())
             {
                 return;
             }
 
+            EnsureVisualReferences();
+
             bool pulseEnabled = ModConfig.EnableVisualPulsing != null && ModConfig.EnableVisualPulsing.Value;
-            if (pulseEnabled)
+            if (pulseEnabled && !IsEquipTransitioning())
             {
                 // Динамический рескейл динамиков от реального звука
                 float speakerScale = 1f + smoothedRMS * 0.55f;
@@ -1218,7 +1247,7 @@ namespace WorkableBoombox.Items
                 float bodyPulse = 1f + smoothedRMS * 0.10f;
                 transform.localScale = initialBodyScale * bodyPulse;
             }
-            else
+            else if (!IsEquipTransitioning())
             {
                 if (Speaker1 != null && Speaker1.localScale != Vector3.one) Speaker1.localScale = Vector3.one;
                 if (Speaker2 != null && Speaker2.localScale != Vector3.one) Speaker2.localScale = Vector3.one;
@@ -1236,46 +1265,50 @@ namespace WorkableBoombox.Items
                 return;
             }
 
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0f, 2f) : 0.4f;
             float hue = Mathf.PingPong(Time.time * 0.5f, 1f);
             Color glowColor = Color.HSVToRGB(hue, 1f, 1f);
 
+            float emissionMult = (0.5f + smoothedRMS * 1.5f) * brightness;
             if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null)
             {
-                SpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+                SpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
 
             if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null)
             {
-                SpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+                SpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
+
+            float lightIntensity = (1.5f + smoothedRMS * 6.0f) * brightness;
 
             if (Light1 != null)
             {
                 Light1.type = LightType.Point;
-                Light1.range = 8.0f;
+                Light1.range = 6.0f;
                 Light1.shadows = LightShadows.None;
                 Light1.renderMode = LightRenderMode.ForcePixel;
                 Light1.enabled = true;
                 Light1.color = glowColor;
-                Light1.intensity = 3.5f + smoothedRMS * 12.0f;
+                Light1.intensity = lightIntensity;
                 if (Speaker1 != null)
                 {
-                    Light1.transform.position = Speaker1.position + transform.forward * 0.15f;
+                    Light1.transform.position = Speaker1.position + Speaker1.forward * 0.12f;
                 }
             }
 
             if (Light2 != null)
             {
                 Light2.type = LightType.Point;
-                Light2.range = 8.0f;
+                Light2.range = 6.0f;
                 Light2.shadows = LightShadows.None;
                 Light2.renderMode = LightRenderMode.ForcePixel;
                 Light2.enabled = true;
                 Light2.color = glowColor;
-                Light2.intensity = 3.5f + smoothedRMS * 12.0f;
+                Light2.intensity = lightIntensity;
                 if (Speaker2 != null)
                 {
-                    Light2.transform.position = Speaker2.position + transform.forward * 0.15f;
+                    Light2.transform.position = Speaker2.position + Speaker2.forward * 0.12f;
                 }
             }
         }
@@ -1311,12 +1344,15 @@ namespace WorkableBoombox.Items
 
         private void TurnOffVisuals()
         {
-            if (IsBoomboxInPocket() || IsEquipTransitioning())
+            if (IsBoomboxInPocket())
             {
                 return;
             }
 
-            transform.localScale = Vector3.Lerp(transform.localScale, initialBodyScale, Time.deltaTime * 10f);
+            if (!IsEquipTransitioning())
+            {
+                transform.localScale = Vector3.Lerp(transform.localScale, initialBodyScale, Time.deltaTime * 10f);
+            }
 
             if (Speaker1 != null) Speaker1.localScale = Vector3.one;
             if (Speaker2 != null) Speaker2.localScale = Vector3.one;
@@ -1466,6 +1502,12 @@ namespace WorkableBoombox.Items
                 // Глушим основной AudioSource, который телепортирован далеко под карту
                 AudioSource.volume = 0f;
 
+                // Выключаем свет на основном телепортированном бумбоксе, пока он в кармане
+                if (Light1 != null && Light1.enabled) { Light1.enabled = false; Light1.intensity = 0f; }
+                if (Light2 != null && Light2.enabled) { Light2.enabled = false; Light2.intensity = 0f; }
+                if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null) SpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
+                if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null) SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+
                 if (pocketAudioSource != null)
                 {
                     if (pocketAudioSource.clip != AudioSource.clip)
@@ -1528,6 +1570,7 @@ namespace WorkableBoombox.Items
                     }
                 }
             }
+            EnsureVisualReferences();
         }
 
         private void AnimatePocketVisuals()
@@ -1549,37 +1592,40 @@ namespace WorkableBoombox.Items
 
             float hue = Mathf.PingPong(Time.time * 0.5f, 1f);
             Color glowColor = Color.HSVToRGB(hue, 1f, 1f);
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0f, 2f) : 0.4f;
+            float pocketIntensity = (1.2f + smoothedRMS * 4.0f) * brightness;
 
             if (pocketLight1 != null)
             {
                 pocketLight1.type = LightType.Point;
-                pocketLight1.range = 7.0f;
+                pocketLight1.range = 5.0f;
                 pocketLight1.shadows = LightShadows.None;
                 pocketLight1.renderMode = LightRenderMode.ForcePixel;
                 pocketLight1.enabled = true;
                 pocketLight1.color = glowColor;
-                pocketLight1.intensity = 2.5f + smoothedRMS * 8.0f;
+                pocketLight1.intensity = pocketIntensity;
             }
 
             if (pocketLight2 != null)
             {
                 pocketLight2.type = LightType.Point;
-                pocketLight2.range = 7.0f;
+                pocketLight2.range = 5.0f;
                 pocketLight2.shadows = LightShadows.None;
                 pocketLight2.renderMode = LightRenderMode.ForcePixel;
                 pocketLight2.enabled = true;
                 pocketLight2.color = glowColor;
-                pocketLight2.intensity = 2.5f + smoothedRMS * 8.0f;
+                pocketLight2.intensity = pocketIntensity;
             }
 
+            float pocketEmission = (0.5f + smoothedRMS * 1.5f) * brightness;
             if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null)
             {
-                pocketSpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+                pocketSpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * pocketEmission);
             }
 
             if (pocketSpeakerRenderer2 != null && pocketSpeakerRenderer2.material != null)
             {
-                pocketSpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+                pocketSpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * pocketEmission);
             }
         }
 

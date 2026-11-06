@@ -92,9 +92,13 @@ namespace WorkableBoombox.UI
             {
                 InputManager.instance.SwitchToUIInputs();
             }
+            SemiFunc.CursorUnlock(0.5f);
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
-            SemiFunc.CursorUnlock(0.5f);
+            if (MenuCursor.instance != null)
+            {
+                MenuCursor.instance.OverrideHide(0.5f);
+            }
 
             isAddingPlaylist = false;
             newPlaylistInput = "";
@@ -141,6 +145,10 @@ namespace WorkableBoombox.UI
             }
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
+            if (MenuCursor.instance != null)
+            {
+                MenuCursor.instance.OverrideHideReset();
+            }
         }
 
         private void OnDisable()
@@ -174,6 +182,12 @@ namespace WorkableBoombox.UI
             SemiFunc.InputDisableAiming();
             SemiFunc.InputDisableMovement();
             SemiFunc.CursorUnlock(0.1f);
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+            if (MenuCursor.instance != null)
+            {
+                MenuCursor.instance.OverrideHide(0.1f);
+            }
 
             if (ChatManager.instance != null && ChatManager.instance.StateIsActive())
             {
@@ -295,6 +309,9 @@ namespace WorkableBoombox.UI
             {
                 return;
             }
+
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
 
             InitStyles();
 
