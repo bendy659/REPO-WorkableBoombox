@@ -15,6 +15,7 @@ A fully featured, networked portable boombox mod for **R.E.P.O.** with custom mu
 * **Facility Boomboxes:** Naturally spawned valuable boomboxes in the complex are also upgraded.
 * **Multiplayer Synced:** Playback state, track skips, volume, scrubbing, and playlists are fully synced across all players via Photon PUN RPCs with network timestamps.
 * **Audio Reactivity:** Speakers pulse with real bass and RMS audio volume, accompanied by RGB reactive lights and optional close-range camera shake.
+* **Pocket Companion & Memory:** Continues playing when placed in inventory, hovering over your shoulder with responsive lights, and remembers exact track timestamp, volume, and playback modes.
 
 ### 🎮 Keybindings (Hover over boombox or hold in hands)
 * **`[E]`** — **Play / Pause** toggle.
@@ -52,6 +53,7 @@ The mod checks Git tree commit SHAs at game launch, downloads new tracks directl
 * **Улучшение найденных бумбоксов:** Найденные в шахте бумбоксы также автоматически становятся рабочими.
 * **Сетевая синхронизация:** Состояние воспроизведения, треки, громкость и перемотка синхронизируются у всех игроков в лобби через Photon PUN.
 * **Светомузыка и бас:** Динамики и корпус пульсируют в такт басам (RMS), светодиоды светятся мягким RGB, а при громкой музыке рядом ощущается легкая вибрация камеры.
+* **Карманный компаньон и память:** При помещении в инвентарь продолжает играть и парит стильным компаньоном за плечом игрока со светомузыкой. Запоминает выбранный трек, точную секунду, громкость и режимы при уборке в карман и сменах уровней.
 
 ### 🎮 Управление (при взгляде на бумбокс или в руках)
 * **`[E]`** — **Вкл / Выкл** музыки.

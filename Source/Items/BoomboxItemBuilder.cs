@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using BepInEx;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,6 +16,51 @@ namespace WorkableBoombox.Items
         public static bool IsRegistered { get; private set; }
         public static GameObject RegisteredPrefab { get; private set; }
         public static Item RegisteredItemSO { get; private set; }
+        public static Sprite CustomBoomboxSprite { get; private set; }
+
+        public static Sprite GetBoomboxSprite()
+        {
+            if (CustomBoomboxSprite != null)
+            {
+                return CustomBoomboxSprite;
+            }
+
+            try
+            {
+                string iconPath = Path.Combine(Paths.PluginPath, "WorkableBoombox", "icon.png");
+                if (!File.Exists(iconPath))
+                {
+                    string assemblyDir = Path.GetDirectoryName(typeof(BoomboxItemBuilder).Assembly.Location);
+                    if (!string.IsNullOrEmpty(assemblyDir))
+                    {
+                        iconPath = Path.Combine(assemblyDir, "icon.png");
+                    }
+                }
+
+                if (File.Exists(iconPath))
+                {
+                    byte[] bytes = File.ReadAllBytes(iconPath);
+                    Texture2D tex = new Texture2D(256, 256, TextureFormat.RGBA32, false);
+                    if (ImageConversion.LoadImage(tex, bytes))
+                    {
+                        CustomBoomboxSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                        CustomBoomboxSprite.name = "WorkableBoombox_Icon";
+                        Plugin.Log.LogInfo("[BoomboxItemBuilder] Спрайт иконки инвентаря успешно создан из icon.png!");
+                        return CustomBoomboxSprite;
+                    }
+                }
+                else
+                {
+                    Plugin.Log.LogWarning($"[BoomboxItemBuilder] icon.png не найден для спрайта инвентаря: {iconPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[BoomboxItemBuilder] Ошибка при создании спрайта иконки: {ex}");
+            }
+
+            return null;
+        }
 
         public static void Initialize()
         {
@@ -255,6 +302,14 @@ namespace WorkableBoombox.Items
                 if (equippable == null)
                 {
                     equippable = customPrefab.AddComponent<ItemEquippable>();
+                }
+
+                // Назначаем иконку предмета для инвентаря
+                Sprite iconSprite = GetBoomboxSprite();
+                if (iconSprite != null)
+                {
+                    attr.icon = iconSprite;
+                    equippable.ItemIcon = iconSprite;
                 }
 
                 // Регистрация в REPOLib

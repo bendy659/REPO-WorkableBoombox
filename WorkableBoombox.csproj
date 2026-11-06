@@ -5,7 +5,7 @@
     <AssemblyName>WorkableBoombox</AssemblyName>
     <RootNamespace>WorkableBoombox</RootNamespace>
     <Product>WorkableBoombox Mod for R.E.P.O.</Product>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -91,6 +91,10 @@
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\REPO\REPO_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>C:\Program Files (x86)\Steam\steamapps\common\REPO\REPO_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.UnityWebRequestModule">
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\REPO\REPO_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
       <Private>false</Private>
@@ -108,6 +112,7 @@
     </PropertyGroup>
     <MakeDir Directories="$(ProfilePluginDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProfilePluginDir)" />
+    <Copy SourceFiles="$(ProjectDir)icon.png" DestinationFolder="$(ProfilePluginDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

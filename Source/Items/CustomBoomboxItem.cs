@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Photon.Pun;
 using UnityEngine;
 using WorkableBoombox.Audio;
@@ -29,6 +30,23 @@ namespace WorkableBoombox.Items
         public Renderer SpeakerRenderer2;
         public PhysGrabObject PhysGrabObject;
         public AudioSource AudioSource;
+        public ItemEquippable ItemEquippable { get; private set; }
+
+        // Pocket cosmetic visual & audio
+        private GameObject pocketVisual;
+        private AudioSource pocketAudioSource;
+        private Transform pocketSpeaker1;
+        private Transform pocketSpeaker2;
+        private Light pocketLight1;
+        private Light pocketLight2;
+        private Renderer pocketSpeakerRenderer1;
+        private Renderer pocketSpeakerRenderer2;
+        private float stateSaveInterval;
+
+        private static readonly FieldInfo isEquippingField =
+            typeof(ItemEquippable).GetField("isEquipping", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo isUnequippingField =
+            typeof(ItemEquippable).GetField("isUnequipping", BindingFlags.NonPublic | BindingFlags.Instance);
 
         // State
         public bool IsPlaying { get; private set; }
@@ -82,6 +100,113 @@ namespace WorkableBoombox.Items
             {
                 PhysGrabObject = GetComponent<PhysGrabObject>();
             }
+
+            if (ItemEquippable == null)
+            {
+                ItemEquippable = GetComponent<ItemEquippable>();
+            }
+        }
+
+        private void Start()
+        {
+            StartCoroutine(RestoreStateWhenReady());
+        }
+
+        private System.Collections.IEnumerator RestoreStateWhenReady()
+        {
+            while (BoomboxAudioManager.Instance == null || !BoomboxAudioManager.Instance.IsLoaded)
+            {
+                yield return new WaitForSeconds(0.2f);
+            }
+
+            if (BoomboxStateMemory.HasSavedState)
+            {
+                bool isMasterOrOwner = PhotonNetwork.IsMasterClient || photonView.IsMine || !SemiFunc.IsMultiplayer();
+                if (isMasterOrOwner)
+                {
+                    BoomboxStateMemory.Restore(this);
+                }
+            }
+        }
+
+        public float GetCurrentPlaybackTime()
+        {
+            if (AudioSource != null && AudioSource.clip != null && AudioSource.isPlaying)
+            {
+                return AudioSource.time;
+            }
+
+            if (pocketAudioSource != null && pocketAudioSource.isPlaying)
+            {
+                return pocketAudioSource.time;
+            }
+
+            return StartOffsetSeconds;
+        }
+
+        public void RestoreSavedState(int trackIdx, float time, float vol, bool muted, LoopMode loop, bool shuffle, bool playing)
+        {
+            CurrentVolume = Mathf.Clamp01(vol);
+            IsMuted = muted;
+            CurrentLoopMode = loop;
+            ShuffleEnabled = shuffle;
+
+            if (trackIdx >= 0)
+            {
+                CurrentTrackIndex = trackIdx;
+                StartOffsetSeconds = time;
+                if (playing)
+                {
+                    photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, trackIdx, PhotonNetwork.Time, time);
+                }
+            }
+        }
+
+        public bool IsBoomboxInPocket()
+        {
+            if (ItemEquippable != null)
+            {
+                if (ItemEquippable.IsEquipped())
+                {
+                    return true;
+                }
+
+                if (isEquippingField != null)
+                {
+                    try
+                    {
+                        if ((bool)isEquippingField.GetValue(ItemEquippable))
+                        {
+                            return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (transform.localScale.magnitude < initialBodyScale.magnitude * 0.85f)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool IsEquipTransitioning()
+        {
+            if (ItemEquippable != null && isUnequippingField != null)
+            {
+                try
+                {
+                    if ((bool)isUnequippingField.GetValue(ItemEquippable))
+                    {
+                        return true;
+                    }
+                }
+                catch { }
+            }
+
+            return false;
         }
 
         private void OnEnable()
@@ -106,6 +231,30 @@ namespace WorkableBoombox.Items
 
             HandlePendingSeekDebounce();
             HandlePendingVolumeDebounce();
+
+            // Периодическое сохранение точного времени воспроизведения
+            if (IsPlaying)
+            {
+                stateSaveInterval += Time.deltaTime;
+                if (stateSaveInterval >= 1.0f)
+                {
+                    stateSaveInterval = 0f;
+                    BoomboxStateMemory.SavedTime = GetCurrentPlaybackTime();
+                }
+            }
+
+            // Обработка нахождения в инвентаре/кармане
+            bool isEquipped = IsBoomboxInPocket();
+            if (isEquipped)
+            {
+                UpdatePocketMode();
+                CheckTrackProgression();
+                return;
+            }
+            else
+            {
+                DisablePocketMode();
+            }
 
             if (!IsPlaying)
             {
@@ -272,6 +421,8 @@ namespace WorkableBoombox.Items
             {
                 BoomboxHUD.Instance.ShowVolumeFeedback(Mathf.RoundToInt(CurrentVolume * 100f), IsMuted);
             }
+
+            BoomboxStateMemory.Save(this);
         }
 
         public void ApplyLocalVolume(float vol, bool muted)
@@ -291,6 +442,8 @@ namespace WorkableBoombox.Items
             {
                 BoomboxHUD.Instance.ShowTrackNotification(BoomboxLocalization.NotificationLoop(GetLoopModeString()));
             }
+
+            BoomboxStateMemory.Save(this);
         }
 
         [PunRPC]
@@ -302,6 +455,8 @@ namespace WorkableBoombox.Items
             {
                 BoomboxHUD.Instance.ShowTrackNotification(BoomboxLocalization.NotificationShuffle(ShuffleEnabled));
             }
+
+            BoomboxStateMemory.Save(this);
         }
 
         [PunRPC]
@@ -315,6 +470,8 @@ namespace WorkableBoombox.Items
                     AudioSource.Stop();
                 }
             }
+
+            BoomboxStateMemory.Save(this);
         }
 
         [PunRPC]
@@ -351,6 +508,8 @@ namespace WorkableBoombox.Items
                     string repeatPrefix = CurrentLoopMode == LoopMode.Single ? "🔂 " : (ShuffleEnabled ? "🔀 " : "▶ ");
                     BoomboxHUD.Instance.ShowTrackNotification($"{repeatPrefix}{track.Title}");
                 }
+
+                BoomboxStateMemory.Save(this);
             }
             else
             {
@@ -380,6 +539,8 @@ namespace WorkableBoombox.Items
                 {
                     AudioSource.Play();
                 }
+
+                BoomboxStateMemory.Save(this);
             }
         }
 
@@ -546,6 +707,11 @@ namespace WorkableBoombox.Items
 
         private void AnimateVisuals()
         {
+            if (IsBoomboxInPocket() || IsEquipTransitioning())
+            {
+                return;
+            }
+
             bool pulseEnabled = ModConfig.EnableVisualPulsing != null && ModConfig.EnableVisualPulsing.Value;
             if (pulseEnabled)
             {
@@ -627,6 +793,11 @@ namespace WorkableBoombox.Items
 
         private void TurnOffVisuals()
         {
+            if (IsBoomboxInPocket() || IsEquipTransitioning())
+            {
+                return;
+            }
+
             transform.localScale = Vector3.Lerp(transform.localScale, initialBodyScale, Time.deltaTime * 10f);
 
             if (Speaker1 != null) Speaker1.localScale = Vector3.one;
@@ -652,6 +823,231 @@ namespace WorkableBoombox.Items
             if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null)
             {
                 SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+            }
+        }
+
+        private void InitPocketVisual()
+        {
+            if (pocketVisual != null) return;
+            if (BoomboxItemBuilder.RegisteredPrefab == null) return;
+
+            try
+            {
+                pocketVisual = UnityEngine.Object.Instantiate(BoomboxItemBuilder.RegisteredPrefab);
+                pocketVisual.name = "PocketBoomboxVisual_" + gameObject.name;
+                pocketVisual.transform.localScale = Vector3.one * 0.45f;
+
+                // Удаляем всю физику, коллайдеры и сетевые компоненты с косметической копии
+                foreach (Component comp in pocketVisual.GetComponentsInChildren<Component>(true))
+                {
+                    if (comp is PhysGrabObject || comp is Rigidbody || comp is Collider ||
+                        comp is PhotonView || comp is ItemAttributes || comp is ItemEquippable ||
+                        comp is CustomBoomboxItem || comp is RoomVolumeCheck || comp is ItemToggle ||
+                        comp is PhysGrabObjectImpactDetector)
+                    {
+                        UnityEngine.Object.Destroy(comp);
+                    }
+                }
+
+                // Ищем динамики и свет
+                Transform[] allTransforms = pocketVisual.GetComponentsInChildren<Transform>(true);
+                foreach (Transform t in allTransforms)
+                {
+                    if (t.name == "speaker1" || (Speaker1 != null && t.name == Speaker1.name)) pocketSpeaker1 = t;
+                    if (t.name == "speaker2" || (Speaker2 != null && t.name == Speaker2.name)) pocketSpeaker2 = t;
+                }
+
+                Light[] lights = pocketVisual.GetComponentsInChildren<Light>(true);
+                if (lights.Length > 0) pocketLight1 = lights[0];
+                if (lights.Length > 1) pocketLight2 = lights[1];
+
+                if (pocketSpeaker1 != null) pocketSpeakerRenderer1 = pocketSpeaker1.GetComponent<Renderer>();
+                if (pocketSpeaker2 != null) pocketSpeakerRenderer2 = pocketSpeaker2.GetComponent<Renderer>();
+
+                pocketAudioSource = pocketVisual.GetComponent<AudioSource>();
+                if (pocketAudioSource == null)
+                {
+                    pocketAudioSource = pocketVisual.AddComponent<AudioSource>();
+                }
+                pocketAudioSource.spatialBlend = 1.0f;
+                pocketAudioSource.rolloffMode = AudioRolloffMode.Linear;
+                pocketAudioSource.minDistance = 2.0f;
+                pocketAudioSource.maxDistance = ModConfig.AudioMaxDistance.Value;
+                pocketAudioSource.loop = false;
+                pocketAudioSource.playOnAwake = false;
+
+                pocketVisual.SetActive(false);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[CustomBoombox] Ошибка создания pocketVisual: {ex}");
+            }
+        }
+
+        private void UpdatePocketMode()
+        {
+            if (ItemEquippable == null) return;
+            InitPocketVisual();
+            if (pocketVisual == null) return;
+
+            PlayerAvatar owner = ItemEquippable.GetOwnerPlayerAvatar();
+            if (owner == null)
+            {
+                if (pocketVisual.activeSelf) pocketVisual.SetActive(false);
+                return;
+            }
+
+            if (!pocketVisual.activeSelf)
+            {
+                pocketVisual.SetActive(true);
+            }
+
+            // Точка крепления: за спиной / у правого плеча и головы игрока
+            Transform anchor = null;
+            if (owner.playerAvatarVisuals != null)
+            {
+                anchor = owner.playerAvatarVisuals.bodyTopUpTransform != null
+                    ? owner.playerAvatarVisuals.bodyTopUpTransform
+                    : owner.playerAvatarVisuals.transform;
+            }
+            if (anchor == null)
+            {
+                anchor = owner.playerTransform != null ? owner.playerTransform : owner.transform;
+            }
+
+            // Небольшой левитирующий боб-эффект
+            float bob = Mathf.Sin(Time.time * 2.5f) * 0.03f;
+            Vector3 targetPos = anchor.position - anchor.forward * 0.32f + anchor.up * (0.16f + bob) + anchor.right * 0.22f;
+            Quaternion targetRot = anchor.rotation * Quaternion.Euler(0f, 180f, 0f);
+
+            pocketVisual.transform.position = Vector3.Lerp(pocketVisual.transform.position, targetPos, Time.deltaTime * 20f);
+            pocketVisual.transform.rotation = Quaternion.Slerp(pocketVisual.transform.rotation, targetRot, Time.deltaTime * 20f);
+
+            // Синхронизация 3D звука при нахождении в кармане
+            if (IsPlaying && AudioSource != null && AudioSource.clip != null)
+            {
+                // Глушим основной AudioSource, который телепортирован далеко под карту
+                AudioSource.volume = 0f;
+
+                if (pocketAudioSource != null)
+                {
+                    if (pocketAudioSource.clip != AudioSource.clip)
+                    {
+                        pocketAudioSource.clip = AudioSource.clip;
+                    }
+
+                    float expectedTime = (float)((PhotonNetwork.Time - PlayStartTime) + StartOffsetSeconds);
+                    if (expectedTime >= 0f && expectedTime < AudioSource.clip.length)
+                    {
+                        if (Mathf.Abs(pocketAudioSource.time - expectedTime) > 0.35f)
+                        {
+                            pocketAudioSource.time = expectedTime;
+                        }
+                    }
+
+                    float masterVol = Mathf.Clamp01(ModConfig.BoomboxVolume.Value);
+                    pocketAudioSource.volume = IsMuted ? 0f : (CurrentVolume * masterVol);
+
+                    if (!pocketAudioSource.isPlaying)
+                    {
+                        pocketAudioSource.Play();
+                    }
+                }
+
+                AnimatePocketVisuals();
+            }
+            else
+            {
+                if (pocketAudioSource != null && pocketAudioSource.isPlaying)
+                {
+                    pocketAudioSource.Stop();
+                }
+                TurnOffPocketVisuals();
+            }
+        }
+
+        private void DisablePocketMode()
+        {
+            if (pocketVisual != null && pocketVisual.activeSelf)
+            {
+                pocketVisual.SetActive(false);
+                if (pocketAudioSource != null && pocketAudioSource.isPlaying)
+                {
+                    pocketAudioSource.Stop();
+                }
+
+                // Восстанавливаем основной AudioSource при доставании из кармана
+                ApplyLocalVolume(CurrentVolume, IsMuted);
+                if (IsPlaying && AudioSource != null && AudioSource.clip != null)
+                {
+                    float targetTime = (float)((PhotonNetwork.Time - PlayStartTime) + StartOffsetSeconds);
+                    if (targetTime >= 0f && targetTime < AudioSource.clip.length)
+                    {
+                        AudioSource.time = targetTime;
+                    }
+                    if (!AudioSource.isPlaying)
+                    {
+                        AudioSource.Play();
+                    }
+                }
+            }
+        }
+
+        private void AnimatePocketVisuals()
+        {
+            float spScale = 1f + smoothedRMS * 0.45f;
+            Vector3 targetScale = new Vector3(spScale, spScale, spScale);
+            if (pocketSpeaker1 != null) pocketSpeaker1.localScale = targetScale;
+            if (pocketSpeaker2 != null) pocketSpeaker2.localScale = targetScale;
+
+            float hue = Mathf.PingPong(Time.time * 0.5f, 1f);
+            Color glowColor = Color.HSVToRGB(hue, 1f, 1f);
+
+            if (pocketLight1 != null)
+            {
+                pocketLight1.enabled = true;
+                pocketLight1.color = glowColor;
+                pocketLight1.intensity = 2f + smoothedRMS * 4f;
+            }
+
+            if (pocketLight2 != null)
+            {
+                pocketLight2.enabled = true;
+                pocketLight2.color = glowColor;
+                pocketLight2.intensity = 2f + smoothedRMS * 4f;
+            }
+
+            if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null)
+            {
+                pocketSpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+            }
+
+            if (pocketSpeakerRenderer2 != null && pocketSpeakerRenderer2.material != null)
+            {
+                pocketSpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * (1f + smoothedRMS * 2f));
+            }
+        }
+
+        private void TurnOffPocketVisuals()
+        {
+            if (pocketSpeaker1 != null) pocketSpeaker1.localScale = Vector3.one;
+            if (pocketSpeaker2 != null) pocketSpeaker2.localScale = Vector3.one;
+            if (pocketLight1 != null) pocketLight1.enabled = false;
+            if (pocketLight2 != null) pocketLight2.enabled = false;
+            if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null) pocketSpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
+            if (pocketSpeakerRenderer2 != null && pocketSpeakerRenderer2.material != null) pocketSpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+        }
+
+        private void OnDestroy()
+        {
+            if (IsPlaying || CurrentTrackIndex >= 0)
+            {
+                BoomboxStateMemory.Save(this);
+            }
+
+            if (pocketVisual != null)
+            {
+                Destroy(pocketVisual);
             }
         }
     }
