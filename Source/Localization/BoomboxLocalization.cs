@@ -57,7 +57,7 @@ namespace WorkableBoombox.Localization
         public static string NotificationShuffle(bool enabled) => IsRussian ? $"Смешивание треков: [{(enabled ? "ВКЛ (Смешивание)" : "ВЫКЛ (По порядку)")}]" : $"Track Shuffle: [{(enabled ? "ON (Shuffle)" : "OFF (Sequential)")}]";
         public static string NotificationVolume(int percent, bool muted) => muted ? (IsRussian ? "[ 🔇 Без звука ]" : "[ 🔇 Muted ]") : (IsRussian ? $"[ 🔊 Громкость: {percent}% ]" : $"[ 🔊 Volume: {percent}% ]");
 
-        public static string PromptRow1(string eKey, string fKey) => IsRussian ? $"[{eKey}] Вкл/Выкл   |   [{fKey}] След. трек" : $"[{eKey}] Toggle On/Off   |   [{fKey}] Next Track";
+        public static string PromptRow1(string eKey, string fKey, string pKey) => IsRussian ? $"[{eKey}] Вкл/Выкл   |   [{fKey}] След. трек   |   [{pKey}] Плейлисты" : $"[{eKey}] Toggle On/Off   |   [{fKey}] Next Track   |   [{pKey}] Playlists";
         public static string PromptRow2(string rKey, string loopStr, string tKey, string shuffleStr) => IsRussian ? $"[{rKey}] Зацикливание: {loopStr}   |   [{tKey}] Смешивание: {shuffleStr}" : $"[{rKey}] Loop: {loopStr}   |   [{tKey}] Shuffle: {shuffleStr}";
         public static string PromptRow3(string vKey, int volumePercent, bool isMuted) => IsRussian ? $"[{vKey}] Звук: {(isMuted ? "Без звука" : volumePercent + "%")}   |   [Зажать {vKey} + Колёсико] Громкость" : $"[{vKey}] Sound: {(isMuted ? "Muted" : volumePercent + "%")}   |   [Hold {vKey} + Scroll] Volume";
         public static string PromptRow4(string fKey) => IsRussian ? $"[Зажать {fKey} + Колёсико] Перемотка" : $"[Hold {fKey} + Scroll] Scrub Time";

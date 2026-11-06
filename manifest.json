@@ -1,6 +1,6 @@
 {
   "name": "WorkableBoombox",
-  "version_number": "1.0.3",
+  "version_number": "1.1.0",
   "website_url": "https://github.com/bendy659/REPO-WorkableBoombox",
   "description": "A fully functional portable boombox with custom music, track manager, volume control, and online GitHub sync for R.E.P.O.",
   "dependencies": [

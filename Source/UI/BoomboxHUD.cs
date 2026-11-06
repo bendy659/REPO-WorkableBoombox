@@ -196,8 +196,9 @@ namespace WorkableBoombox.UI
                 string rKey = ModConfig.LoopModeKey.Value.ToString();
                 string tKey = ModConfig.ShuffleKey.Value.ToString();
                 string vKey = ModConfig.VolumeKey.Value.ToString();
+                string pKey = ModConfig.PlaylistKey.Value.ToString();
 
-                GUILayout.Label(BoomboxLocalization.PromptRow1(eKey, fKey), hotkeyStyle);
+                GUILayout.Label(BoomboxLocalization.PromptRow1(eKey, fKey, pKey), hotkeyStyle);
                 GUILayout.Label(BoomboxLocalization.PromptRow2(rKey, hoverLoopStatus, tKey, hoverShuffleStatus), subHotkeyStyle);
                 GUILayout.Label(BoomboxLocalization.PromptRow3(vKey, hoverVolumePercent, hoverIsMuted), subHotkeyStyle);
                 GUILayout.Label(BoomboxLocalization.PromptRow4(fKey), hotkeyStyle);

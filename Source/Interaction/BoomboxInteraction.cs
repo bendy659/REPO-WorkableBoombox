@@ -77,22 +77,35 @@ namespace WorkableBoombox.Interaction
 
             // 2. Если не держит в руках - ищем взглядом через Raycast
             Camera cam = Camera.main;
-            if (cam == null)
+            if (cam != null)
             {
-                ClearTarget();
-                return;
+                Ray ray = new Ray(cam.transform.position, cam.transform.forward);
+                int mask = ~LayerMask.GetMask("Ignore Raycast");
+
+                if (Physics.Raycast(ray, out RaycastHit hit, MaxInteractionDistance, mask, QueryTriggerInteraction.Ignore))
+                {
+                    CustomBoomboxItem boombox = hit.collider.GetComponentInParent<CustomBoomboxItem>();
+                    if (boombox != null)
+                    {
+                        SetTarget(boombox);
+                        return;
+                    }
+                }
             }
 
-            Ray ray = new Ray(cam.transform.position, cam.transform.forward);
-            int mask = ~LayerMask.GetMask("Ignore Raycast");
-
-            if (Physics.Raycast(ray, out RaycastHit hit, MaxInteractionDistance, mask, QueryTriggerInteraction.Ignore))
+            // 3. Если не наведен взглядом — проверяем, экипирован ли бумбокс в инвентаре у локального игрока
+            foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
             {
-                CustomBoomboxItem boombox = hit.collider.GetComponentInParent<CustomBoomboxItem>();
-                if (boombox != null)
+                if (b == null || b.ItemEquippable == null) continue;
+
+                if (b.ItemEquippable.IsEquipped())
                 {
-                    SetTarget(boombox);
-                    return;
+                    PlayerAvatar owner = b.ItemEquippable.GetOwnerPlayerAvatar();
+                    if (owner != null && (owner == PlayerAvatar.instance || (owner.photonView != null && owner.photonView.IsMine)))
+                    {
+                        SetTarget(b);
+                        return;
+                    }
                 }
             }
 
@@ -171,6 +184,11 @@ namespace WorkableBoombox.Interaction
 
         private void HandleInput()
         {
+            if (BoomboxPlaylistUI.Instance != null && BoomboxPlaylistUI.Instance.IsOpen)
+            {
+                return;
+            }
+
             if (currentTargetBoombox == null)
             {
                 isHoldingNextTrackKey = false;
@@ -185,6 +203,17 @@ namespace WorkableBoombox.Interaction
             KeyCode loopKey = ModConfig.LoopModeKey.Value;
             KeyCode shuffleKey = ModConfig.ShuffleKey.Value;
             KeyCode volumeKey = ModConfig.VolumeKey.Value;
+            KeyCode playlistKey = ModConfig.PlaylistKey.Value;
+
+            // 0. Меню плейлистов [P]
+            if (Input.GetKeyDown(playlistKey))
+            {
+                if (BoomboxPlaylistUI.Instance != null)
+                {
+                    BoomboxPlaylistUI.Instance.ToggleMenu(currentTargetBoombox);
+                    return;
+                }
+            }
 
             // 1. Включение / Выключение [E]
             if (Input.GetKeyDown(toggleKey))

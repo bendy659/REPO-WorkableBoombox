@@ -16,6 +16,7 @@ namespace WorkableBoombox.Config
         public static ConfigEntry<KeyCode> LoopModeKey;
         public static ConfigEntry<KeyCode> ShuffleKey;
         public static ConfigEntry<KeyCode> VolumeKey;
+        public static ConfigEntry<KeyCode> PlaylistKey;
         public static ConfigEntry<float> ScrubStepSeconds;
         public static ConfigEntry<float> VolumeStepPercent;
 
@@ -53,6 +54,7 @@ namespace WorkableBoombox.Config
             LoopModeKey = config.Bind("Controls", "LoopModeKey", KeyCode.R, "Клавиша смены режима зацикливания / Cycle loop mode key");
             ShuffleKey = config.Bind("Controls", "ShuffleKey", KeyCode.T, "Клавиша включения/выключения перемешивания / Toggle shuffle key");
             VolumeKey = config.Bind("Controls", "VolumeKey", KeyCode.V, "Клавиша управления громкостью: [V] - Mute, [Зажать V + Колёсико] - Регулировка / Volume key");
+            PlaylistKey = config.Bind("Controls", "PlaylistKey", KeyCode.P, "Клавиша открытия меню плейлистов / Playlist menu key");
             ScrubStepSeconds = config.Bind("Controls", "ScrubStepSeconds", 5f, "Секунд для перемотки колесиком мыши / Scrub step seconds");
             VolumeStepPercent = config.Bind("Controls", "VolumeStepPercent", 5f, "Процент изменения громкости за один щелчок колесика мыши (1-20%) / Volume step percent");
 

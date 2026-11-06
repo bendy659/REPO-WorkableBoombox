@@ -14,6 +14,10 @@ namespace WorkableBoombox.Items
         public static bool SavedShuffle { get; private set; } = true;
         public static bool SavedIsPlaying { get; private set; }
 
+        public static bool SavedIsPlaylistMode { get; private set; }
+        public static string SavedPlaylistOwner { get; private set; }
+        public static string SavedPlaylistName { get; private set; }
+
         public static void Save(CustomBoomboxItem boombox)
         {
             if (boombox == null)
@@ -29,6 +33,10 @@ namespace WorkableBoombox.Items
             SavedLoopMode = boombox.CurrentLoopMode;
             SavedShuffle = boombox.ShuffleEnabled;
             SavedIsPlaying = boombox.IsPlaying;
+
+            SavedIsPlaylistMode = boombox.IsPlaylistMode;
+            SavedPlaylistOwner = boombox.ActivePlaylistOwner;
+            SavedPlaylistName = boombox.ActivePlaylistName;
         }
 
         public static void Restore(CustomBoomboxItem boombox)
@@ -45,7 +53,10 @@ namespace WorkableBoombox.Items
                 SavedIsMuted,
                 SavedLoopMode,
                 SavedShuffle,
-                SavedIsPlaying
+                SavedIsPlaying,
+                SavedIsPlaylistMode,
+                SavedPlaylistOwner,
+                SavedPlaylistName
             );
         }
     }

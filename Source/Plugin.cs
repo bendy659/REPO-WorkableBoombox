@@ -7,6 +7,7 @@ using WorkableBoombox.Audio;
 using WorkableBoombox.Config;
 using WorkableBoombox.Interaction;
 using WorkableBoombox.Items;
+using WorkableBoombox.Playlists;
 using WorkableBoombox.UI;
 
 namespace WorkableBoombox
@@ -18,7 +19,7 @@ namespace WorkableBoombox
     {
         public const string ModGUID = "com.bendy659.workableboombox";
         public const string ModName = "Workable Boombox";
-        public const string ModVersion = "1.0.3";
+        public const string ModVersion = "1.1.0";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -56,6 +57,9 @@ namespace WorkableBoombox
 
             systemsHost.AddComponent<BoomboxAudioManager>();
             systemsHost.AddComponent<GitHubTrackDownloader>();
+            systemsHost.AddComponent<YouTubeAudioProvider>();
+            systemsHost.AddComponent<PlaylistManager>();
+            systemsHost.AddComponent<BoomboxPlaylistUI>();
             systemsHost.AddComponent<BoomboxHUD>();
             systemsHost.AddComponent<BoomboxInteraction>();
 

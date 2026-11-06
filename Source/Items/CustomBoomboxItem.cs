@@ -6,6 +6,7 @@ using UnityEngine;
 using WorkableBoombox.Audio;
 using WorkableBoombox.Config;
 using WorkableBoombox.Localization;
+using WorkableBoombox.Playlists;
 using WorkableBoombox.UI;
 
 namespace WorkableBoombox.Items
@@ -60,6 +61,12 @@ namespace WorkableBoombox.Items
 
         private readonly List<int> playlistQueue = new List<int>();
         private int currentQueueIndex = -1;
+
+        // Active Playlist Mode
+        public bool IsPlaylistMode { get; private set; }
+        public string ActivePlaylistOwner { get; private set; }
+        public string ActivePlaylistName { get; private set; }
+        public readonly List<PlaylistTrackEntry> ActivePlaylistTracks = new List<PlaylistTrackEntry>();
 
         // Volume State
         public float CurrentVolume { get; private set; } = 1.0f;
@@ -127,6 +134,10 @@ namespace WorkableBoombox.Items
                     BoomboxStateMemory.Restore(this);
                 }
             }
+            else if (SemiFunc.IsMultiplayer() && !PhotonNetwork.IsMasterClient && !photonView.IsMine)
+            {
+                photonView.RPC(nameof(RequestStateSyncRPC), RpcTarget.MasterClient);
+            }
         }
 
         public float GetCurrentPlaybackTime()
@@ -144,12 +155,48 @@ namespace WorkableBoombox.Items
             return StartOffsetSeconds;
         }
 
-        public void RestoreSavedState(int trackIdx, float time, float vol, bool muted, LoopMode loop, bool shuffle, bool playing)
+        public void RestoreSavedState(
+            int trackIdx,
+            float time,
+            float vol,
+            bool muted,
+            LoopMode loop,
+            bool shuffle,
+            bool playing,
+            bool isPlaylistMode = false,
+            string plOwner = null,
+            string plName = null)
         {
             CurrentVolume = Mathf.Clamp01(vol);
             IsMuted = muted;
+            ApplyLocalVolume(CurrentVolume, IsMuted);
             CurrentLoopMode = loop;
             ShuffleEnabled = shuffle;
+
+            if (isPlaylistMode && !string.IsNullOrEmpty(plName) && PlaylistManager.Instance != null)
+            {
+                var tracks = PlaylistManager.Instance.GetTrackList(plOwner, plName);
+                if (tracks != null && tracks.Count > 0)
+                {
+                    IsPlaylistMode = true;
+                    ActivePlaylistOwner = plOwner;
+                    ActivePlaylistName = plName;
+                    ActivePlaylistTracks.Clear();
+                    ActivePlaylistTracks.AddRange(tracks);
+                    BuildPlaylistQueue(trackIdx, shuffle);
+
+                    if (trackIdx >= 0 && trackIdx < tracks.Count)
+                    {
+                        CurrentTrackIndex = trackIdx;
+                        StartOffsetSeconds = time;
+                        if (playing)
+                        {
+                            photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, trackIdx, PhotonNetwork.Time, time);
+                        }
+                    }
+                    return;
+                }
+            }
 
             if (trackIdx >= 0)
             {
@@ -273,8 +320,11 @@ namespace WorkableBoombox.Items
             bool nextState = !IsPlaying;
             if (nextState)
             {
-                int localCount = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
-                if (localCount == 0)
+                int trackCount = IsPlaylistMode
+                    ? ActivePlaylistTracks.Count
+                    : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
+
+                if (trackCount == 0)
                 {
                     // Локальных треков нет: если мультиплеер, запрашиваем воспроизведение у хоста
                     if (SemiFunc.IsMultiplayer())
@@ -322,8 +372,11 @@ namespace WorkableBoombox.Items
 
         public void NextTrack()
         {
-            int localCount = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
-            if (localCount == 0)
+            int trackCount = IsPlaylistMode
+                ? ActivePlaylistTracks.Count
+                : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
+
+            if (trackCount == 0)
             {
                 if (SemiFunc.IsMultiplayer())
                 {
@@ -422,7 +475,21 @@ namespace WorkableBoombox.Items
 
         public string GetCurrentTrackDisplayName()
         {
-            if (!IsPlaying || CurrentTrackIndex < 0 || BoomboxAudioManager.Instance == null)
+            if (!IsPlaying || CurrentTrackIndex < 0)
+            {
+                return null;
+            }
+
+            if (IsPlaylistMode)
+            {
+                if (CurrentTrackIndex >= 0 && CurrentTrackIndex < ActivePlaylistTracks.Count)
+                {
+                    return ActivePlaylistTracks[CurrentTrackIndex].Title;
+                }
+                return null;
+            }
+
+            if (BoomboxAudioManager.Instance == null)
             {
                 return null;
             }
@@ -500,52 +567,176 @@ namespace WorkableBoombox.Items
             BoomboxStateMemory.Save(this);
         }
 
+        public void PlayPlaylist(string ownerNick, string playlistName, int startingTrackIndex)
+        {
+            photonView.RPC(nameof(PlayPlaylistRPC), RpcTarget.All, ownerNick, playlistName, startingTrackIndex, PhotonNetwork.Time);
+        }
+
+        [PunRPC]
+        public void PlayPlaylistRPC(string ownerNick, string playlistName, int startingIndex, double startTime, PhotonMessageInfo info = default)
+        {
+            if (PlaylistManager.Instance == null)
+            {
+                return;
+            }
+
+            var tracks = PlaylistManager.Instance.GetTrackList(ownerNick, playlistName);
+            if (tracks == null || tracks.Count == 0)
+            {
+                Plugin.Log.LogWarning($"[CustomBoombox] Плейлист '{playlistName}' игрока '{ownerNick}' пуст или не найден.");
+                return;
+            }
+
+            IsPlaylistMode = true;
+            ActivePlaylistOwner = ownerNick;
+            ActivePlaylistName = playlistName;
+            ActivePlaylistTracks.Clear();
+            ActivePlaylistTracks.AddRange(tracks);
+
+            BuildPlaylistQueue(startingIndex, ShuffleEnabled);
+
+            int trackToPlay = (playlistQueue.Count > 0 && currentQueueIndex >= 0 && currentQueueIndex < playlistQueue.Count)
+                ? playlistQueue[currentQueueIndex]
+                : 0;
+
+            PlayTrackInternal(trackToPlay, startTime, 0f);
+        }
+
+        private void BuildPlaylistQueue(int startTrackIdx, bool shuffle)
+        {
+            playlistQueue.Clear();
+            int count = ActivePlaylistTracks.Count;
+            if (count == 0) return;
+
+            for (int i = 0; i < count; i++)
+            {
+                playlistQueue.Add(i);
+            }
+
+            if (shuffle && count > 1)
+            {
+                // Fisher-Yates bag shuffle без повторов
+                for (int i = playlistQueue.Count - 1; i > 0; i--)
+                {
+                    int j = UnityEngine.Random.Range(0, i + 1);
+                    int temp = playlistQueue[i];
+                    playlistQueue[i] = playlistQueue[j];
+                    playlistQueue[j] = temp;
+                }
+
+                if (startTrackIdx >= 0 && startTrackIdx < count)
+                {
+                    int foundIdx = playlistQueue.IndexOf(startTrackIdx);
+                    if (foundIdx > 0)
+                    {
+                        playlistQueue[foundIdx] = playlistQueue[0];
+                        playlistQueue[0] = startTrackIdx;
+                    }
+                }
+            }
+            else if (startTrackIdx >= 0 && startTrackIdx < count)
+            {
+                currentQueueIndex = startTrackIdx;
+                return;
+            }
+
+            currentQueueIndex = 0;
+        }
+
         [PunRPC]
         public void PlayTrackRPC(int trackIndex, double startTime, float startOffset, PhotonMessageInfo info = default)
+        {
+            PlayTrackInternal(trackIndex, startTime, startOffset);
+        }
+
+        private void PlayTrackInternal(int trackIndex, double startTime, float startOffset)
         {
             CurrentTrackIndex = trackIndex;
             PlayStartTime = startTime;
             StartOffsetSeconds = startOffset;
             IsPlaying = true;
 
-            if (BoomboxAudioManager.Instance == null)
+            if (IsPlaylistMode)
             {
-                return;
-            }
-
-            BoomboxAudioManager.TrackData track = BoomboxAudioManager.Instance.GetTrack(trackIndex);
-            if (track != null && track.Clip != null)
-            {
-                AudioSource.clip = track.Clip;
-                ApplyLocalVolume(CurrentVolume, IsMuted);
-
-                double timePassed = PhotonNetwork.Time - startTime;
-                if (timePassed < 0) timePassed = 0;
-
-                float targetOffset = (float)(timePassed + startOffset);
-                if (targetOffset < track.Clip.length)
+                if (trackIndex < 0 || trackIndex >= ActivePlaylistTracks.Count)
                 {
-                    AudioSource.time = targetOffset;
-                    AudioSource.Play();
+                    return;
                 }
 
+                PlaylistTrackEntry entry = ActivePlaylistTracks[trackIndex];
                 if (BoomboxHUD.Instance != null)
                 {
                     string repeatPrefix = CurrentLoopMode == LoopMode.Single ? "🔂 " : (ShuffleEnabled ? "🔀 " : "▶ ");
-                    BoomboxHUD.Instance.ShowTrackNotification($"{repeatPrefix}{track.Title}");
+                    BoomboxHUD.Instance.ShowTrackNotification($"⏳ {repeatPrefix}{entry.Title}...");
                 }
 
-                BoomboxStateMemory.Save(this);
+                if (YouTubeAudioProvider.Instance != null)
+                {
+                    YouTubeAudioProvider.Instance.GetAudioClipAsync(entry.Url, entry.Title, clip =>
+                    {
+                        if (clip != null && IsPlaying && CurrentTrackIndex == trackIndex)
+                        {
+                            ApplyClipAndPlay(clip, startTime, startOffset, entry.Title);
+                        }
+                    }, err =>
+                    {
+                        Plugin.Log.LogError($"[CustomBoombox] Ошибка загрузки трека из плейлиста: {err}");
+                        if (BoomboxHUD.Instance != null)
+                        {
+                            BoomboxHUD.Instance.ShowTrackNotification($"❌ Ошибка: {entry.Title}");
+                        }
+                        AdvanceQueueAndPlay(true);
+                    });
+                }
             }
             else
             {
-                Plugin.Log.LogWarning($"[CustomBoombox] Трек под индексом {trackIndex} не найден локально.");
-                if (GitHubTrackDownloader.Instance != null && !GitHubTrackDownloader.Instance.IsSyncing)
+                if (BoomboxAudioManager.Instance == null)
                 {
-                    Plugin.Log.LogInfo("[CustomBoombox] Трек отсутствует локально, запускаем фоновую синхронизацию...");
-                    GitHubTrackDownloader.Instance.StartSync();
+                    return;
+                }
+
+                BoomboxAudioManager.TrackData track = BoomboxAudioManager.Instance.GetTrack(trackIndex);
+                if (track != null && track.Clip != null)
+                {
+                    ApplyClipAndPlay(track.Clip, startTime, startOffset, track.Title);
+                }
+                else
+                {
+                    Plugin.Log.LogWarning($"[CustomBoombox] Трек под индексом {trackIndex} не найден локально.");
+                    if (GitHubTrackDownloader.Instance != null && !GitHubTrackDownloader.Instance.IsSyncing)
+                    {
+                        Plugin.Log.LogInfo("[CustomBoombox] Трек отсутствует локально, запускаем фоновую синхронизацию...");
+                        GitHubTrackDownloader.Instance.StartSync();
+                    }
                 }
             }
+        }
+
+        private void ApplyClipAndPlay(AudioClip clip, double startTime, float startOffset, string title)
+        {
+            if (AudioSource == null || clip == null) return;
+
+            AudioSource.clip = clip;
+            ApplyLocalVolume(CurrentVolume, IsMuted);
+
+            double timePassed = PhotonNetwork.Time - startTime;
+            if (timePassed < 0) timePassed = 0;
+
+            float targetOffset = (float)(timePassed + startOffset);
+            if (targetOffset < clip.length)
+            {
+                AudioSource.time = targetOffset;
+                AudioSource.Play();
+            }
+
+            if (BoomboxHUD.Instance != null)
+            {
+                string repeatPrefix = CurrentLoopMode == LoopMode.Single ? "🔂 " : (ShuffleEnabled ? "🔀 " : "▶ ");
+                BoomboxHUD.Instance.ShowTrackNotification($"{repeatPrefix}{title}");
+            }
+
+            BoomboxStateMemory.Save(this);
         }
 
         [PunRPC]
@@ -556,7 +747,10 @@ namespace WorkableBoombox.Items
                 return;
             }
 
-            int count = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+            int count = IsPlaylistMode
+                ? ActivePlaylistTracks.Count
+                : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
+
             if (count > 0)
             {
                 if (playlistQueue.Count == 0 || currentQueueIndex < 0)
@@ -580,11 +774,86 @@ namespace WorkableBoombox.Items
                 return;
             }
 
-            int count = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+            int count = IsPlaylistMode
+                ? ActivePlaylistTracks.Count
+                : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
+
             if (count > 0)
             {
                 AdvanceQueueAndPlay(true);
             }
+        }
+
+        [PunRPC]
+        public void RequestStateSyncRPC(PhotonMessageInfo info = default)
+        {
+            if (!PhotonNetwork.IsMasterClient && !photonView.IsMine)
+            {
+                return;
+            }
+
+            float currentOffset = GetCurrentPlaybackTime();
+            photonView.RPC(
+                nameof(SyncFullStateRPC),
+                info.Sender,
+                IsPlaying,
+                CurrentTrackIndex,
+                currentOffset,
+                CurrentVolume,
+                IsMuted,
+                (int)CurrentLoopMode,
+                ShuffleEnabled,
+                IsPlaylistMode,
+                ActivePlaylistOwner ?? "",
+                ActivePlaylistName ?? ""
+            );
+        }
+
+        [PunRPC]
+        public void SyncFullStateRPC(
+            bool playing,
+            int trackIndex,
+            float currentOffset,
+            float volume,
+            bool muted,
+            int loopMode,
+            bool shuffle,
+            bool isPlaylist,
+            string plOwner,
+            string plName,
+            PhotonMessageInfo info = default)
+        {
+            CurrentVolume = Mathf.Clamp01(volume);
+            IsMuted = muted;
+            ApplyLocalVolume(CurrentVolume, IsMuted);
+            CurrentLoopMode = (LoopMode)loopMode;
+            ShuffleEnabled = shuffle;
+
+            if (!playing || trackIndex < 0)
+            {
+                IsPlaying = false;
+                if (AudioSource != null && AudioSource.isPlaying)
+                {
+                    AudioSource.Stop();
+                }
+                return;
+            }
+
+            if (isPlaylist && !string.IsNullOrEmpty(plName) && PlaylistManager.Instance != null)
+            {
+                var tracks = PlaylistManager.Instance.GetTrackList(plOwner, plName);
+                if (tracks != null && tracks.Count > 0)
+                {
+                    IsPlaylistMode = true;
+                    ActivePlaylistOwner = plOwner;
+                    ActivePlaylistName = plName;
+                    ActivePlaylistTracks.Clear();
+                    ActivePlaylistTracks.AddRange(tracks);
+                    BuildPlaylistQueue(trackIndex, shuffle);
+                }
+            }
+
+            PlayTrackInternal(trackIndex, PhotonNetwork.Time, currentOffset);
         }
 
         [PunRPC]
@@ -651,12 +920,15 @@ namespace WorkableBoombox.Items
         {
             trackSwitchCooldown = 1.0f;
 
-            if (BoomboxAudioManager.Instance == null || BoomboxAudioManager.Instance.LoadedTracks.Count == 0)
+            int count = IsPlaylistMode
+                ? ActivePlaylistTracks.Count
+                : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
+
+            if (count == 0)
             {
                 return;
             }
 
-            int count = BoomboxAudioManager.Instance.LoadedTracks.Count;
             if (playlistQueue.Count != count)
             {
                 RebuildQueue(false);
@@ -715,6 +987,12 @@ namespace WorkableBoombox.Items
 
         private void RebuildQueue(bool shuffle)
         {
+            if (IsPlaylistMode)
+            {
+                BuildPlaylistQueue(CurrentTrackIndex, shuffle);
+                return;
+            }
+
             playlistQueue.Clear();
             if (BoomboxAudioManager.Instance == null) return;
 

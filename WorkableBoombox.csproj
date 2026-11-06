@@ -5,7 +5,7 @@
     <AssemblyName>WorkableBoombox</AssemblyName>
     <RootNamespace>WorkableBoombox</RootNamespace>
     <Product>WorkableBoombox Mod for R.E.P.O.</Product>
-    <Version>1.0.3</Version>
+    <Version>1.1.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

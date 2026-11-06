@@ -19,15 +19,30 @@ A fully featured, networked portable boombox mod for **R.E.P.O.** with custom mu
 
 ### 🎮 Keybindings (Hover over boombox or hold in hands)
 * **`[E]`** — **Play / Pause** toggle.
+* **`[P]`** — **Open Playlist Menu** (3-column UI: Players | Playlists | Tracks with YouTube audio & network sync).
 * **`[F]`** — **Next track** in queue.
 * **`[R]`** — **Cycle Loop Mode**:
   * `Off` — Plays playlist once and turns off.
   * `Playlist` — Loops entire playlist continuously.
   * `Single` — Loops the currently playing track.
-* **`[T]`** — **Shuffle Mode** toggle (`On` / `Off`).
+* **`[T]`** — **Shuffle Mode** toggle (`On` / `Off` — true deck shuffle without repeats until all tracks are exhausted).
 * **`[V]`** — **Mute / Unmute** toggle.
 * **`[Hold V + Mouse Scroll]`** — Smooth **Volume Adjustment** (with HUD indicator `[ 🔊 Volume: 80% ]`).
 * **`[Hold F + Mouse Scroll]`** — **Scrub / Rewind / Fast-forward** track time by 5s steps (with time indicator `[ +15s ] 01:25 / 03:40`).
+
+### 🎵 Playlists & YouTube Audio
+Playlists are stored in `BepInEx/config/WorkableBoombox/playlists.json` or in individual `.json` files under `BepInEx/config/WorkableBoombox/Playlists/`.
+Format:
+```json
+{
+  "My Favorite Mix": {
+    "Never Gonna Give You Up": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "Local Track": "local:MyTrack.mp3"
+  }
+}
+```
+* **Network Synced:** Each player's playlists are automatically shared across the lobby. You can pick any player's playlist or track from the `[P]` menu!
+* **YouTube Downloads:** YouTube tracks are automatically streamed and cached via built-in `yt-dlp` support.
 
 ### 🎵 Adding Custom Music
 Supported formats: **`.mp3`**, **`.ogg`**, **`.wav`**, **`.aiff`**.
@@ -57,15 +72,29 @@ The mod checks Git tree commit SHAs at game launch, downloads new tracks directl
 
 ### 🎮 Управление (при взгляде на бумбокс или в руках)
 * **`[E]`** — **Вкл / Выкл** музыки.
+* **`[P]`** — **Открыть меню плейлистов** (3-колоночная таблица: Игроки | Плейлисты | Треки, поддержка YouTube и сетевая синхронизация).
 * **`[F]`** — **Следующий трек**.
 * **`[R]`** — **Режим зацикливания**:
   * `Выкл` — проигрывает список один раз и выключается.
   * `Цикл` — бесконечный повтор плейлиста.
   * `Единый цикл` — зацикливание одного выбранного трека.
-* **`[T]`** — **Перемешивание (Shuffle)** (`Вкл` / `Выкл`).
+* **`[T]`** — **Перемешивание (Shuffle)** (`Вкл` / `Выкл` — колодный рандом без повторов треков до исчерпания очереди).
 * **`[V]`** — **Mute / Unmute** (быстрое глушение звука).
 * **`[Зажать V + Колёсико мыши]`** — **Регулировка громкости** (с шагом 5% и экранным индикатором `[ 🔊 Громкость: 80% ]`).
 * **`[Зажать F + Колёсико мыши]`** — **Перемотка трека** вперед / назад по 5 секунд.
+
+### 🎵 Плейлисты и YouTube
+Плейлисты хранятся в `BepInEx/config/WorkableBoombox/playlists.json` или в отдельных `.json` файлах в папке `Playlists/`:
+```json
+{
+  "Мой любимый микс": {
+    "Rick Astley": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "Локальный трек": "local:MySong.mp3"
+  }
+}
+```
+* **Общие плейлисты в лобби:** Плейлисты всех игроков автоматически видны всем в меню `[P]`. Можно выбрать плейлист любого друга или запустить конкретный трек!
+* **YouTube интеграция:** Музыка с YouTube скачивается в фоновом режиме и кэшируется в `Cache/`. При повторном включении играет мгновенно из диска!
 
 ### ⚙️ Конфигурация (`com.bendy659.workableboombox.cfg`)
 * `Language` — `Auto` (автоматически из игры), `Russian` или `English`.
