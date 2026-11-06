@@ -6,6 +6,8 @@ using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 using WorkableBoombox.Config;
+using WorkableBoombox.Localization;
+using WorkableBoombox.UI;
 
 namespace WorkableBoombox.Audio
 {
@@ -40,6 +42,14 @@ namespace WorkableBoombox.Audio
         public static GitHubTrackDownloader Instance { get; private set; }
 
         public bool IsSyncing { get; private set; }
+
+        private class BypassCertificate : CertificateHandler
+        {
+            protected override bool ValidateCertificate(byte[] certificateData)
+            {
+                return true;
+            }
+        }
 
         private string MetadataFilePath => System.IO.Path.Combine(BoomboxAudioManager.TracksDirectory, ".sync_metadata.json");
 
@@ -95,6 +105,7 @@ namespace WorkableBoombox.Audio
 
             using (UnityWebRequest req = UnityWebRequest.Get(apiUrl))
             {
+                req.certificateHandler = new BypassCertificate();
                 req.SetRequestHeader("User-Agent", "WorkableBoombox-Mod");
                 req.SetRequestHeader("Accept", "application/vnd.github+json");
 
@@ -167,39 +178,54 @@ namespace WorkableBoombox.Audio
 
                     Plugin.Log.LogInfo($"[GitHubSync] Скачиваем '{item.Name}' ({item.Size / 1024} КБ)...");
 
-                    string downloadUrl = item.DownloadUrl;
-                    if (string.IsNullOrWhiteSpace(downloadUrl))
-                    {
-                        downloadUrl = $"https://api.github.com/repos/{owner}/{repo}/contents/{item.Name}";
-                    }
+                    byte[] fileBytes = null;
 
-                    using (UnityWebRequest downloadReq = UnityWebRequest.Get(downloadUrl))
+                    // Метод 1: GitHub Contents API (application/vnd.github.v3.raw) с авторизацией
+                    string rawApiUrl = $"https://api.github.com/repos/{owner}/{repo}/contents/{Uri.EscapeDataString(item.Name)}";
+                    using (UnityWebRequest downloadReq = UnityWebRequest.Get(rawApiUrl))
                     {
+                        downloadReq.certificateHandler = new BypassCertificate();
                         downloadReq.SetRequestHeader("User-Agent", "WorkableBoombox-Mod");
+                        downloadReq.SetRequestHeader("Accept", "application/vnd.github.v3.raw");
                         if (hasToken)
                         {
                             downloadReq.SetRequestHeader("Authorization", $"Bearer {token}");
                         }
 
-                        // Если качаем через API, нужен заголовок raw
-                        if (downloadUrl.Contains("api.github.com"))
-                        {
-                            downloadReq.SetRequestHeader("Accept", "application/vnd.github.v3.raw");
-                        }
-
                         yield return downloadReq.SendWebRequest();
 
-                        bool downloadFailed = downloadReq.result != UnityWebRequest.Result.Success;
-                        if (downloadFailed)
+                        if (downloadReq.result == UnityWebRequest.Result.Success && downloadReq.downloadHandler.data != null && downloadReq.downloadHandler.data.Length > 0)
                         {
-                            Plugin.Log.LogError($"[GitHubSync] Ошибка скачивания '{item.Name}': {downloadReq.error}");
-                            continue;
+                            fileBytes = downloadReq.downloadHandler.data;
                         }
+                    }
 
-                        byte[] fileBytes = downloadReq.downloadHandler.data;
+                    // Метод 2: Fallback на item.DownloadUrl (без заголовка Authorization, чтобы raw.githubusercontent не сбоил)
+                    if (fileBytes == null && !string.IsNullOrWhiteSpace(item.DownloadUrl))
+                    {
+                        using (UnityWebRequest fallbackReq = UnityWebRequest.Get(item.DownloadUrl))
+                        {
+                            fallbackReq.certificateHandler = new BypassCertificate();
+                            fallbackReq.SetRequestHeader("User-Agent", "WorkableBoombox-Mod");
+                            yield return fallbackReq.SendWebRequest();
+
+                            if (fallbackReq.result == UnityWebRequest.Result.Success && fallbackReq.downloadHandler.data != null && fallbackReq.downloadHandler.data.Length > 0)
+                            {
+                                fileBytes = fallbackReq.downloadHandler.data;
+                            }
+                        }
+                    }
+
+                    if (fileBytes != null && fileBytes.Length > 0)
+                    {
                         File.WriteAllBytes(targetPath, fileBytes);
                         metadata.FileShas[item.Name] = item.Sha;
                         downloadedCount++;
+                        Plugin.Log.LogInfo($"[GitHubSync] Успешно скачан: '{item.Name}' ({fileBytes.Length / 1024} КБ)");
+                    }
+                    else
+                    {
+                        Plugin.Log.LogError($"[GitHubSync] Не удалось скачать '{item.Name}' ни через API, ни через DownloadUrl.");
                     }
                 }
 
@@ -235,9 +261,17 @@ namespace WorkableBoombox.Audio
 
                 Plugin.Log.LogInfo($"[GitHubSync] Синхронизация завершена. Скачано новых/обновленных треков: {downloadedCount}");
 
-                if (downloadedCount > 0 && BoomboxAudioManager.Instance != null)
+                if (BoomboxAudioManager.Instance != null && (downloadedCount > 0 || BoomboxAudioManager.Instance.LoadedTracks.Count == 0))
                 {
                     BoomboxAudioManager.Instance.ReloadTracks();
+                }
+
+                if (BoomboxHUD.Instance != null)
+                {
+                    string msg = BoomboxLocalization.IsRussian
+                        ? $"[GitHub] Синхронизировано! Новых треков: {downloadedCount}"
+                        : $"[GitHub] Synced! New tracks: {downloadedCount}";
+                    BoomboxHUD.Instance.ShowTrackNotification(msg);
                 }
             }
 

@@ -21,29 +21,77 @@ namespace WorkableBoombox.Audio
 
         public static BoomboxAudioManager Instance { get; private set; }
 
+        public static List<string> GetAllTrackDirectories()
+        {
+            List<string> dirs = new List<string>();
+            try
+            {
+                string assemblyDir = Path.GetDirectoryName(typeof(BoomboxAudioManager).Assembly.Location);
+                if (!string.IsNullOrEmpty(assemblyDir))
+                {
+                    string d1 = Path.Combine(assemblyDir, "Tracks");
+                    if (Directory.Exists(d1) && !dirs.Contains(d1)) dirs.Add(d1);
+                }
+
+                string d2 = Path.Combine(Paths.PluginPath, "WorkableBoombox", "Tracks");
+                if (Directory.Exists(d2) && !dirs.Contains(d2)) dirs.Add(d2);
+
+                string d3 = Path.Combine(Paths.PluginPath, "bendy659-WorkableBoombox", "Tracks");
+                if (Directory.Exists(d3) && !dirs.Contains(d3)) dirs.Add(d3);
+
+                if (Directory.Exists(Paths.PluginPath))
+                {
+                    string[] subDirs = Directory.GetDirectories(Paths.PluginPath, "*WorkableBoombox*", SearchOption.TopDirectoryOnly);
+                    foreach (string sd in subDirs)
+                    {
+                        string candidate = Path.Combine(sd, "Tracks");
+                        if (Directory.Exists(candidate) && !dirs.Contains(candidate))
+                        {
+                            dirs.Add(candidate);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[BoomboxAudioManager] Ошибка поиска директорий треков: {ex.Message}");
+            }
+            return dirs;
+        }
+
         public static string TracksDirectory
         {
             get
             {
                 try
                 {
-                    string fallback = Path.Combine(Paths.PluginPath, "WorkableBoombox", "Tracks");
-                    if (Directory.Exists(fallback))
+                    List<string> existing = GetAllTrackDirectories();
+                    if (existing.Count > 0)
                     {
-                        return fallback;
+                        return existing[0];
                     }
 
                     string assemblyDir = Path.GetDirectoryName(typeof(BoomboxAudioManager).Assembly.Location);
                     if (!string.IsNullOrEmpty(assemblyDir))
                     {
-                        return Path.Combine(assemblyDir, "Tracks");
+                        string localTracks = Path.Combine(assemblyDir, "Tracks");
+                        if (!Directory.Exists(localTracks))
+                        {
+                            Directory.CreateDirectory(localTracks);
+                        }
+                        return localTracks;
                     }
                 }
                 catch
                 {
                 }
 
-                return Path.Combine(Paths.PluginPath, "WorkableBoombox", "Tracks");
+                string fallback = Path.Combine(Paths.PluginPath, "WorkableBoombox", "Tracks");
+                if (!Directory.Exists(fallback))
+                {
+                    Directory.CreateDirectory(fallback);
+                }
+                return fallback;
             }
         }
 
@@ -61,10 +109,8 @@ namespace WorkableBoombox.Audio
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            if (!Directory.Exists(TracksDirectory))
-            {
-                Directory.CreateDirectory(TracksDirectory);
-            }
+            string primaryDir = TracksDirectory;
+            Plugin.Log.LogInfo($"[BoomboxAudioManager] Основная папка треков: {primaryDir}");
         }
 
         private void Start()
@@ -82,24 +128,40 @@ namespace WorkableBoombox.Audio
             IsLoaded = false;
             LoadedTracks.Clear();
 
-            if (!Directory.Exists(TracksDirectory))
+            List<string> searchDirs = GetAllTrackDirectories();
+            if (searchDirs.Count == 0)
             {
-                Plugin.Log.LogWarning($"[BoomboxAudioManager] Папка треков не найдена: {TracksDirectory}");
-                IsLoaded = true;
-                yield break;
+                searchDirs.Add(TracksDirectory);
             }
 
-            string[] files = Directory.GetFiles(TracksDirectory);
-            Plugin.Log.LogInfo($"[BoomboxAudioManager] Найдено {files.Length} файлов в папке треков. Начинаем загрузку...");
+            Dictionary<string, string> uniqueAudioFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (string filePath in files)
+            foreach (string dir in searchDirs)
             {
-                string ext = Path.GetExtension(filePath).ToLowerInvariant();
-                bool isAudio = ext == ".mp3" || ext == ".ogg" || ext == ".wav" || ext == ".aiff";
-                if (!isAudio)
+                if (!Directory.Exists(dir)) continue;
+
+                string[] files = Directory.GetFiles(dir);
+                foreach (string filePath in files)
                 {
-                    continue;
+                    string ext = Path.GetExtension(filePath).ToLowerInvariant();
+                    bool isAudio = ext == ".mp3" || ext == ".ogg" || ext == ".wav" || ext == ".aiff";
+                    if (!isAudio) continue;
+
+                    string fileName = Path.GetFileName(filePath);
+                    if (!uniqueAudioFiles.ContainsKey(fileName))
+                    {
+                        uniqueAudioFiles[fileName] = filePath;
+                    }
                 }
+            }
+
+            Plugin.Log.LogInfo($"[BoomboxAudioManager] Найдено {uniqueAudioFiles.Count} уникальных аудиофайлов в {searchDirs.Count} папках. Начинаем загрузку...");
+
+            foreach (KeyValuePair<string, string> kvp in uniqueAudioFiles)
+            {
+                string fileName = kvp.Key;
+                string filePath = kvp.Value;
+                string ext = Path.GetExtension(filePath).ToLowerInvariant();
 
                 AudioType audioType = AudioType.UNKNOWN;
                 if (ext == ".ogg")
@@ -119,7 +181,7 @@ namespace WorkableBoombox.Audio
                     audioType = AudioType.AIFF;
                 }
 
-                string uri = "file://" + Path.GetFullPath(filePath);
+                string uri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
                 using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(uri, audioType))
                 {
                     yield return www.SendWebRequest();
@@ -127,7 +189,7 @@ namespace WorkableBoombox.Audio
                     bool hasError = www.result == UnityWebRequest.Result.ConnectionError || www.result == UnityWebRequest.Result.ProtocolError;
                     if (hasError)
                     {
-                        Plugin.Log.LogError($"[BoomboxAudioManager] Ошибка загрузки {Path.GetFileName(filePath)}: {www.error}");
+                        Plugin.Log.LogError($"[BoomboxAudioManager] Ошибка загрузки {fileName}: {www.error}");
                         continue;
                     }
 
@@ -138,12 +200,11 @@ namespace WorkableBoombox.Audio
                     }
                     catch (Exception ex)
                     {
-                        Plugin.Log.LogError($"[BoomboxAudioManager] Ошибка декодирования {Path.GetFileName(filePath)}: {ex.Message}");
+                        Plugin.Log.LogError($"[BoomboxAudioManager] Ошибка декодирования {fileName}: {ex.Message}");
                     }
 
                     if (clip != null)
                     {
-                        string fileName = Path.GetFileName(filePath);
                         clip.name = Path.GetFileNameWithoutExtension(filePath);
                         LoadedTracks.Add(new TrackData
                         {
@@ -156,7 +217,7 @@ namespace WorkableBoombox.Audio
                     }
                     else
                     {
-                        Plugin.Log.LogWarning($"[BoomboxAudioManager] Не удалось декодировать аудиоклип из '{Path.GetFileName(filePath)}'.");
+                        Plugin.Log.LogWarning($"[BoomboxAudioManager] Не удалось декодировать аудиоклип из '{fileName}'.");
                     }
                 }
             }

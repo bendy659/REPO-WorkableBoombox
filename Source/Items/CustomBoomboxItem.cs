@@ -273,13 +273,34 @@ namespace WorkableBoombox.Items
             bool nextState = !IsPlaying;
             if (nextState)
             {
+                int localCount = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+                if (localCount == 0)
+                {
+                    // Локальных треков нет: если мультиплеер, запрашиваем воспроизведение у хоста
+                    if (SemiFunc.IsMultiplayer())
+                    {
+                        photonView.RPC(nameof(RequestPlayRPC), RpcTarget.MasterClient);
+                    }
+                    else
+                    {
+                        if (BoomboxHUD.Instance != null)
+                        {
+                            BoomboxHUD.Instance.ShowTrackNotification(BoomboxLocalization.IsRussian ? "⚠️ Нет треков для воспроизведения" : "⚠️ No tracks to play");
+                        }
+                    }
+                    return;
+                }
+
                 if (playlistQueue.Count == 0 || currentQueueIndex < 0)
                 {
                     RebuildQueue(true);
                 }
 
                 int trackToPlay = GetCurrentOrNextQueueTrack();
-                photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, trackToPlay, PhotonNetwork.Time, 0f);
+                if (trackToPlay >= 0)
+                {
+                    photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, trackToPlay, PhotonNetwork.Time, 0f);
+                }
             }
             else
             {
@@ -301,8 +322,13 @@ namespace WorkableBoombox.Items
 
         public void NextTrack()
         {
-            if (BoomboxAudioManager.Instance == null || BoomboxAudioManager.Instance.LoadedTracks.Count == 0)
+            int localCount = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+            if (localCount == 0)
             {
+                if (SemiFunc.IsMultiplayer())
+                {
+                    photonView.RPC(nameof(RequestNextTrackRPC), RpcTarget.MasterClient);
+                }
                 return;
             }
 
@@ -514,6 +540,50 @@ namespace WorkableBoombox.Items
             else
             {
                 Plugin.Log.LogWarning($"[CustomBoombox] Трек под индексом {trackIndex} не найден локально.");
+                if (GitHubTrackDownloader.Instance != null && !GitHubTrackDownloader.Instance.IsSyncing)
+                {
+                    Plugin.Log.LogInfo("[CustomBoombox] Трек отсутствует локально, запускаем фоновую синхронизацию...");
+                    GitHubTrackDownloader.Instance.StartSync();
+                }
+            }
+        }
+
+        [PunRPC]
+        public void RequestPlayRPC(PhotonMessageInfo info = default)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                return;
+            }
+
+            int count = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+            if (count > 0)
+            {
+                if (playlistQueue.Count == 0 || currentQueueIndex < 0)
+                {
+                    RebuildQueue(true);
+                }
+
+                int trackToPlay = GetCurrentOrNextQueueTrack();
+                if (trackToPlay >= 0)
+                {
+                    photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, trackToPlay, PhotonNetwork.Time, 0f);
+                }
+            }
+        }
+
+        [PunRPC]
+        public void RequestNextTrackRPC(PhotonMessageInfo info = default)
+        {
+            if (!PhotonNetwork.IsMasterClient)
+            {
+                return;
+            }
+
+            int count = BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
+            if (count > 0)
+            {
+                AdvanceQueueAndPlay(true);
             }
         }
 
@@ -614,6 +684,11 @@ namespace WorkableBoombox.Items
                 }
             }
 
+            if (playlistQueue.Count == 0)
+            {
+                return;
+            }
+
             int nextTrack = playlistQueue[currentQueueIndex];
             photonView.RPC(nameof(PlayTrackRPC), RpcTarget.All, nextTrack, PhotonNetwork.Time, 0f);
         }
@@ -623,6 +698,11 @@ namespace WorkableBoombox.Items
             if (playlistQueue.Count == 0)
             {
                 RebuildQueue(true);
+            }
+
+            if (playlistQueue.Count == 0)
+            {
+                return -1;
             }
 
             if (currentQueueIndex < 0 || currentQueueIndex >= playlistQueue.Count)
