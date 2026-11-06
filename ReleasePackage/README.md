@@ -1,0 +1,74 @@
+# Workable Boombox for R.E.P.O.
+
+[![Thunderstore](https://img.shields.io/badge/Thunderstore-WorkableBoombox-blue)](https://thunderstore.io)
+[![Game](https://img.shields.io/badge/Game-R.E.P.O.-orange)](https://store.steampowered.com)
+
+A fully featured, networked portable boombox mod for **R.E.P.O.** with custom music support, track management, volume controls, audio scrubbing, RGB light show, customizable HUD overlay, and automatic online sync via private/public GitHub repositories.
+
+---
+
+## English Guide
+
+### 📻 Features & Controls
+* **Shop Item:** Buyable in the shop as **Workable Boombox** (costs $45 by default). Can be stored in inventory, held in hands, or transported in carts.
+* **Facility Boomboxes:** Naturally spawned valuable boomboxes in the complex are also upgraded.
+* **Multiplayer Synced:** Playback state, track skips, volume, scrubbing, and playlists are fully synced across all players via Photon PUN RPCs with network timestamps.
+* **Audio Reactivity:** Speakers pulse with real bass and RMS audio volume, accompanied by RGB reactive lights and optional close-range camera shake.
+
+### 🎮 Keybindings (Hover over boombox or hold in hands)
+* **`[E]`** — **Play / Pause** toggle.
+* **`[F]`** — **Next track** in queue.
+* **`[R]`** — **Cycle Loop Mode**:
+  * `Off` — Plays playlist once and turns off.
+  * `Playlist` — Loops entire playlist continuously.
+  * `Single` — Loops the currently playing track.
+* **`[T]`** — **Shuffle Mode** toggle (`On` / `Off`).
+* **`[V]`** — **Mute / Unmute** toggle.
+* **`[Hold V + Mouse Scroll]`** — Smooth **Volume Adjustment** (with HUD indicator `[ 🔊 Volume: 80% ]`).
+* **`[Hold F + Mouse Scroll]`** — **Scrub / Rewind / Fast-forward** track time by 5s steps (with time indicator `[ +15s ] 01:25 / 03:40`).
+
+### 🎵 Adding Custom Music
+Supported formats: **`.mp3`**, **`.ogg`**, **`.wav`**, **`.aiff`**.
+
+#### Method 1: Local Files
+Place your music files into:
+`BepInEx/plugins/WorkableBoombox/Tracks/`
+
+#### Method 2: Automatic GitHub Sync
+Synchronize tracks with your group via a private or public GitHub repo. In `BepInEx/config/com.bendy659.workableboombox.cfg`:
+```ini
+[GitHub]
+GitHubSource = username/repo-name/github_pat_11AB...
+```
+The mod checks Git tree commit SHAs at game launch, downloads new tracks directly from the root of the repository, and removes deleted ones automatically.
+
+---
+
+## Русское руководство
+
+### 📻 Основные возможности
+* **Покупка в магазине:** Продается в терминале как **Workable Boombox** (по умолчанию $45). Можно брать в инвентарь, носить в руках и возить в тележке.
+* **Улучшение найденных бумбоксов:** Найденные в шахте бумбоксы также автоматически становятся рабочими.
+* **Сетевая синхронизация:** Состояние воспроизведения, треки, громкость и перемотка синхронизируются у всех игроков в лобби через Photon PUN.
+* **Светомузыка и бас:** Динамики и корпус пульсируют в такт басам (RMS), светодиоды светятся мягким RGB, а при громкой музыке рядом ощущается легкая вибрация камеры.
+
+### 🎮 Управление (при взгляде на бумбокс или в руках)
+* **`[E]`** — **Вкл / Выкл** музыки.
+* **`[F]`** — **Следующий трек**.
+* **`[R]`** — **Режим зацикливания**:
+  * `Выкл` — проигрывает список один раз и выключается.
+  * `Цикл` — бесконечный повтор плейлиста.
+  * `Единый цикл` — зацикливание одного выбранного трека.
+* **`[T]`** — **Перемешивание (Shuffle)** (`Вкл` / `Выкл`).
+* **`[V]`** — **Mute / Unmute** (быстрое глушение звука).
+* **`[Зажать V + Колёсико мыши]`** — **Регулировка громкости** (с шагом 5% и экранным индикатором `[ 🔊 Громкость: 80% ]`).
+* **`[Зажать F + Колёсико мыши]`** — **Перемотка трека** вперед / назад по 5 секунд.
+
+### ⚙️ Конфигурация (`com.bendy659.workableboombox.cfg`)
+* `Language` — `Auto` (автоматически из игры), `Russian` или `English`.
+* `OverlayPositionX` — горизонтальное положение плашки HUD (0.0 = слева ... 0.5 = центр ... 1.0 = справа).
+* `OverlayPositionY` — вертикальное положение плашки HUD (0.0 = сверху ... 0.6 = под прицелом ... 1.0 = снизу).
+* `EnableCameraShake` — включение/выключение тряски камеры рядом с громкой музыкой (`true` / `false`).
+* `EnableVisualPulsing` — включение/выключение пульсации колонок в такт басу (`true` / `false`).
+* `ShopPrice` — цена на ценнике в магазине ($45).
+* `GitHubSource` — inline-ссылка на репозиторий треков.
