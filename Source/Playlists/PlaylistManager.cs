@@ -29,7 +29,6 @@ namespace WorkableBoombox.Playlists
 
         public const string PhotonPropertyKey = "wb_pl";
 
-        public static string PlaylistsDirectory => Path.Combine(Paths.ConfigPath, "WorkableBoombox", "Playlists");
         public static string MasterPlaylistsFile => Path.Combine(Paths.ConfigPath, "WorkableBoombox", "playlists.json");
 
         public Dictionary<string, Dictionary<string, string>> LocalPlaylists { get; private set; } =
@@ -59,7 +58,7 @@ namespace WorkableBoombox.Playlists
         {
             LoadLocalPlaylists();
             SyncLocalPlaylistsToRoom();
-            Plugin.Log.LogInfo($"[PlaylistManager] Плейлисты перезагружены. Локальных плейлистов: {LocalPlaylists.Count}");
+            Plugin.Log.LogInfo($"[PlaylistManager] Playlists reloaded. Local playlists count: {LocalPlaylists.Count}");
         }
 
         public void SyncLocalPlaylistsToRoom()
@@ -77,11 +76,11 @@ namespace WorkableBoombox.Playlists
                     { PhotonPropertyKey, json }
                 };
                 PhotonNetwork.LocalPlayer.SetCustomProperties(props);
-                Plugin.Log.LogInfo("[PlaylistManager] Плейлисты успешно синхронизированы в комнату Photon.");
+                Plugin.Log.LogInfo("[PlaylistManager] Playlists synced to Photon room.");
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[PlaylistManager] Ошибка синхронизации плейлистов в сеть: {ex.Message}");
+                Plugin.Log.LogError($"[PlaylistManager] Error syncing playlists: {ex.Message}");
             }
         }
 
@@ -95,9 +94,19 @@ namespace WorkableBoombox.Playlists
                     Directory.CreateDirectory(configBoombox);
                 }
 
-                if (!Directory.Exists(PlaylistsDirectory))
+                // Удаляем устаревшую вспомогательную папку Playlists если она осталась от прошлых версий
+                string legacyPlaylistsDir = Path.Combine(configBoombox, "Playlists");
+                if (Directory.Exists(legacyPlaylistsDir))
                 {
-                    Directory.CreateDirectory(PlaylistsDirectory);
+                    try
+                    {
+                        Directory.Delete(legacyPlaylistsDir, true);
+                        Plugin.Log.LogInfo("[PlaylistManager] Cleaned up legacy Playlists directory.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.LogWarning($"[PlaylistManager] Could not delete legacy Playlists dir: {ex.Message}");
+                    }
                 }
 
                 if (!File.Exists(MasterPlaylistsFile))
@@ -125,12 +134,12 @@ namespace WorkableBoombox.Playlists
 
                     string json = JsonConvert.SerializeObject(sample, Formatting.Indented);
                     File.WriteAllText(MasterPlaylistsFile, json);
-                    Plugin.Log.LogInfo("[PlaylistManager] Создан файл примеров плейлистов: " + MasterPlaylistsFile);
+                    Plugin.Log.LogInfo("[PlaylistManager] Created default playlists file: " + MasterPlaylistsFile);
                 }
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogError($"[PlaylistManager] Ошибка создания директорий плейлистов: {ex.Message}");
+                Plugin.Log.LogError($"[PlaylistManager] Error preparing playlist files: {ex.Message}");
             }
         }
 
@@ -138,7 +147,7 @@ namespace WorkableBoombox.Playlists
         {
             var loaded = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
 
-            // 1. Читаем мастер-файл playlists.json
+            // Читаем единственный мастер-файл playlists.json
             if (File.Exists(MasterPlaylistsFile))
             {
                 try
@@ -158,37 +167,12 @@ namespace WorkableBoombox.Playlists
                 }
                 catch (Exception ex)
                 {
-                    Plugin.Log.LogError($"[PlaylistManager] Ошибка чтения {MasterPlaylistsFile}: {ex.Message}");
-                }
-            }
-
-            // 2. Читаем все индивидуальные .json файлы в папке Playlists/
-            if (Directory.Exists(PlaylistsDirectory))
-            {
-                string[] files = Directory.GetFiles(PlaylistsDirectory, "*.json");
-                foreach (string file in files)
-                {
-                    try
-                    {
-                        string playlistName = Path.GetFileNameWithoutExtension(file);
-                        string json = File.ReadAllText(file);
-
-                        // Может быть как словарь "ИмяТрека": "URL", так и полный объект
-                        var tracks = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-                        if (tracks != null && tracks.Count > 0)
-                        {
-                            loaded[playlistName] = tracks;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Plugin.Log.LogError($"[PlaylistManager] Ошибка чтения плейлиста '{Path.GetFileName(file)}': {ex.Message}");
-                    }
+                    Plugin.Log.LogError($"[PlaylistManager] Error reading {MasterPlaylistsFile}: {ex.Message}");
                 }
             }
 
             LocalPlaylists = loaded;
-            Plugin.Log.LogInfo($"[PlaylistManager] Загружено локальных плейлистов: {LocalPlaylists.Count}");
+            Plugin.Log.LogInfo($"[PlaylistManager] Loaded local playlists: {LocalPlaylists.Count}");
         }
 
         public Dictionary<string, Dictionary<string, Dictionary<string, string>>> GetAllRoomPlaylists()

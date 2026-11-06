@@ -161,7 +161,7 @@ namespace WorkableBoombox.UI
             // 3. Уведомление о перемотке (по центру экрана)
             if (showScrubNotification)
             {
-                float scrubWidth = 280f;
+                float scrubWidth = 320f;
                 float scrubHeight = 50f;
                 float scrubX = (Screen.width - scrubWidth) * 0.5f;
                 float scrubY = Screen.height * 0.65f;

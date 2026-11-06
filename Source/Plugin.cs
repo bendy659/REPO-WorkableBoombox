@@ -19,7 +19,7 @@ namespace WorkableBoombox
     {
         public const string ModGUID = "com.bendy659.workableboombox";
         public const string ModName = "Workable Boombox";
-        public const string ModVersion = "1.1.3";
+        public const string ModVersion = "1.1.4";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -30,22 +30,22 @@ namespace WorkableBoombox
             Instance = this;
             Log = Logger;
 
-            // 1. Инициализация конфига
+            // 1. Config initialization
             ModConfig.Initialize(Config);
 
             if (!ModConfig.EnableMod.Value)
             {
-                Log.LogInfo($"{ModName} отключен в конфигурации.");
+                Log.LogInfo($"{ModName} is disabled in config.");
                 return;
             }
 
-            // 2. Harmony патчи
+            // 2. Harmony patches
             try
             {
                 HarmonyInstance = new Harmony(ModGUID);
                 HarmonyInstance.PatchAll();
 
-                // Патч для RepoAdminMenu если он установлен
+                // Patch for RepoAdminMenu if present
                 try
                 {
                     Type itemUtilType = AccessTools.TypeByName("RepoAdminMenu.Utils.ItemUtil");
@@ -56,28 +56,27 @@ namespace WorkableBoombox
                         if (spawnMethod != null && postfixMethod != null)
                         {
                             HarmonyInstance.Patch(spawnMethod, postfix: new HarmonyMethod(postfixMethod));
-                            Log.LogInfo("[Harmony] Патч для RepoAdminMenu.ItemUtil.spawnItem успешно применен.");
+                            Log.LogInfo("[Harmony] Patch for RepoAdminMenu.ItemUtil.spawnItem applied.");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.LogWarning($"[Harmony] Не удалось пропатчить RepoAdminMenu: {ex.Message}");
+                    Log.LogWarning($"[Harmony] Failed to patch RepoAdminMenu: {ex.Message}");
                 }
 
-                Log.LogInfo("[Harmony] Патчи успешно применены.");
+                Log.LogInfo("[Harmony] Patches applied successfully.");
             }
             catch (Exception ex)
             {
-                Log.LogError($"[Harmony] Ошибка применения патчей: {ex}");
+                Log.LogError($"[Harmony] Error applying patches: {ex}");
             }
 
-            // 3. Создание вспомогательных систем
+            // 3. Systems host
             GameObject systemsHost = new GameObject("WorkableBoombox_SystemsHost");
             DontDestroyOnLoad(systemsHost);
 
             systemsHost.AddComponent<BoomboxAudioManager>();
-            systemsHost.AddComponent<GitHubTrackDownloader>();
             systemsHost.AddComponent<YouTubeAudioProvider>();
             systemsHost.AddComponent<PlaylistManager>();
             systemsHost.AddComponent<BoomboxPlaylistUI>();
@@ -85,17 +84,11 @@ namespace WorkableBoombox
             systemsHost.AddComponent<BoomboxInteraction>();
             systemsHost.AddComponent<BoomboxTruckSpawner>();
 
-            // 4. Запуск фоновой синхронизации с GitHub (если настроено)
-            if (ModConfig.GitHubSyncEnabled.Value)
-            {
-                GitHubTrackDownloader.Instance.StartSync();
-            }
-
-            // 5. Инициализация сборщика предметов
+            // 4. Boombox item builder
             BoomboxItemBuilder.Initialize();
             StartCoroutine(BoomboxItemBuilder.SearchRoutine());
 
-            Log.LogInfo($"{ModName} v{ModVersion} успешно загружен!");
+            Log.LogInfo($"{ModName} v{ModVersion} loaded successfully!");
         }
     }
 }

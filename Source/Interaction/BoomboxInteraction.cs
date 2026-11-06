@@ -41,22 +41,18 @@ namespace WorkableBoombox.Interaction
 
         private void HandleGlobalShortcuts()
         {
-            // Ручной запуск синхронизации треков с GitHub по нажатию F10
-            if (Input.GetKeyDown(KeyCode.F10))
-            {
-                if (WorkableBoombox.Audio.GitHubTrackDownloader.Instance != null && !WorkableBoombox.Audio.GitHubTrackDownloader.Instance.IsSyncing)
-                {
-                    if (BoomboxHUD.Instance != null)
-                    {
-                        BoomboxHUD.Instance.ShowTrackNotification(BoomboxLocalization.IsRussian ? "🔄 Синхронизация треков с GitHub..." : "🔄 GitHub Syncing tracks...");
-                    }
-                    WorkableBoombox.Audio.GitHubTrackDownloader.Instance.StartSync();
-                }
-            }
         }
 
         private void FindTargetBoombox()
         {
+            // Если игрок сейчас зажимает клавишу перемотки [F] или громкости [V] — не сбрасываем текущую цель!
+            KeyCode nextKey = ModConfig.NextTrackKey != null ? ModConfig.NextTrackKey.Value : KeyCode.F;
+            KeyCode volumeKey = ModConfig.VolumeKey != null ? ModConfig.VolumeKey.Value : KeyCode.V;
+            if (currentTargetBoombox != null && (Input.GetKey(nextKey) || Input.GetKey(volumeKey)))
+            {
+                return;
+            }
+
             // 1. Проверяем, держит ли локальный игрок бумбокс прямо сейчас в руках
             foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
             {
@@ -155,23 +151,12 @@ namespace WorkableBoombox.Interaction
                     }
                     else
                     {
-                        status = BoomboxLocalization.IsRussian
-                            ? "Играет (трек отсутствует локально, [F10] - скачать)"
-                            : "Playing (track missing locally, [F10] to sync)";
+                        status = $"{BoomboxLocalization.StatusPlaying}: Loading...";
                     }
                 }
                 else
                 {
-                    if (localCount == 0)
-                    {
-                        status = BoomboxLocalization.IsRussian
-                            ? "Выключен (нет локальных треков, [F10] - скачать)"
-                            : "Off (no local tracks, [F10] to sync)";
-                    }
-                    else
-                    {
-                        status = BoomboxLocalization.StatusOff;
-                    }
+                    status = BoomboxLocalization.StatusOff;
                 }
 
                 string loopStr = currentTargetBoombox.GetLoopModeString();

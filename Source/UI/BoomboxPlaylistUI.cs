@@ -84,8 +84,13 @@ namespace WorkableBoombox.UI
             TargetBoombox = boombox;
             IsOpen = true;
 
+            if (InputManager.instance != null)
+            {
+                InputManager.instance.SwitchToUIInputs();
+            }
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
+            SemiFunc.CursorUnlock(0.5f);
 
             isAddingPlaylist = false;
             newPlaylistInput = "";
@@ -122,6 +127,10 @@ namespace WorkableBoombox.UI
             isAddingPlaylist = false;
             isAddingTrack = false;
 
+            if (InputManager.instance != null)
+            {
+                InputManager.instance.SwitchToPlayerInputs();
+            }
             Cursor.visible = false;
             Cursor.lockState = CursorLockMode.Locked;
         }
@@ -153,11 +162,17 @@ namespace WorkableBoombox.UI
                 return;
             }
 
-            // Блокируем вращение камеры и перемещение без сброса ракурса камеры в ноль
+            // Блокируем инпуты перемещения и прицеливания во время открытого меню
             SemiFunc.InputDisableAiming();
             SemiFunc.InputDisableMovement();
+            SemiFunc.CursorUnlock(0.1f);
 
-            // Блокируем курсор при закрытии по Escape или кнопке плейлиста
+            if (ChatManager.instance != null && ChatManager.instance.StateIsActive())
+            {
+                ChatManager.instance.ForceConfirmChat();
+            }
+
+            // Закрытие по Escape или повторной клавише плейлиста
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(ModConfig.PlaylistKey.Value))
             {
                 CloseMenu();
@@ -285,7 +300,7 @@ namespace WorkableBoombox.UI
 
             // 1. Верхняя панель заголовка
             Rect headerRect = new Rect(posX + 10f, posY + 10f, totalWidth - 20f, 32f);
-            string titleText = BoomboxLocalization.IsRussian ? "🎵 ПЛЕЙЛИСТЫ БУМБОКСА" : "🎵 BOOMBOX PLAYLISTS";
+            string titleText = "🎵 BOOMBOX PLAYLISTS";
             GUI.Label(headerRect, titleText, headerTitleStyle);
 
             // Кнопка закрытия [X]
@@ -339,7 +354,7 @@ namespace WorkableBoombox.UI
 
             // ================= КОЛОНКА 1: ИГРОКИ =================
             float x1 = posX + 15f;
-            GUI.Box(new Rect(x1, contentY, col1Width, 26f), BoomboxLocalization.IsRussian ? "ИГРОКИ" : "PLAYERS", colHeaderStyle);
+            GUI.Box(new Rect(x1, contentY, col1Width, 26f), "PLAYERS", colHeaderStyle);
             Rect view1Rect = new Rect(x1, contentY + 28f, col1Width, contentHeight - 28f);
             float inner1Height = Mathf.Max(view1Rect.height, roomPlaylists.Count * 32f);
             Rect scroll1Rect = new Rect(0, 0, col1Width - 18f, inner1Height);
@@ -371,7 +386,7 @@ namespace WorkableBoombox.UI
 
             // ================= КОЛОНКА 2: ПЛЕЙЛИСТЫ =================
             float x2 = x1 + col1Width + 10f;
-            GUI.Box(new Rect(x2, contentY, col2Width, 26f), BoomboxLocalization.IsRussian ? "ПЛЕЙЛИСТЫ" : "PLAYLISTS", colHeaderStyle);
+            GUI.Box(new Rect(x2, contentY, col2Width, 26f), "PLAYLISTS", colHeaderStyle);
             Rect view2Rect = new Rect(x2, contentY + 28f, col2Width, contentHeight - 28f);
 
             int plTotal = currentPlayerPlaylists != null ? currentPlayerPlaylists.Count : 0;
@@ -430,11 +445,11 @@ namespace WorkableBoombox.UI
                 else
                 {
                     GUI.Box(new Rect(0, itemY, col2Width - 20f, 64f), GUIContent.none, windowStyle);
-                    GUI.Label(new Rect(4f, itemY + 2f, col2Width - 28f, 16f), BoomboxLocalization.IsRussian ? "Имя плейлиста:" : "Playlist name:", itemLabelStyle);
+                    GUI.Label(new Rect(4f, itemY + 2f, col2Width - 28f, 16f), "Playlist Name:", itemLabelStyle);
                     newPlaylistInput = GUI.TextField(new Rect(4f, itemY + 18f, col2Width - 28f, 20f), newPlaylistInput, inputFieldStyle);
 
                     float halfW = (col2Width - 32f) * 0.5f;
-                    if (GUI.Button(new Rect(4f, itemY + 40f, halfW, 20f), BoomboxLocalization.IsRussian ? "✓ Создать" : "✓ Create", actionButtonStyle))
+                    if (GUI.Button(new Rect(4f, itemY + 40f, halfW, 20f), "✓ Create", actionButtonStyle))
                     {
                         if (!string.IsNullOrWhiteSpace(newPlaylistInput))
                         {
@@ -444,7 +459,7 @@ namespace WorkableBoombox.UI
                             newPlaylistInput = "";
                         }
                     }
-                    if (GUI.Button(new Rect(4f + halfW + 4f, itemY + 40f, halfW, 20f), BoomboxLocalization.IsRussian ? "✕ Отмена" : "✕ Cancel", cancelButtonStyle))
+                    if (GUI.Button(new Rect(4f + halfW + 4f, itemY + 40f, halfW, 20f), "✕ Cancel", cancelButtonStyle))
                     {
                         isAddingPlaylist = false;
                         newPlaylistInput = "";
@@ -456,7 +471,7 @@ namespace WorkableBoombox.UI
 
             // ================= КОЛОНКА 3: ТРЕКИ =================
             float x3 = x2 + col2Width + 10f;
-            GUI.Box(new Rect(x3, contentY, col3Width, 26f), BoomboxLocalization.IsRussian ? "ТРЕКИ" : "TRACKS", colHeaderStyle);
+            GUI.Box(new Rect(x3, contentY, col3Width, 26f), "TRACKS", colHeaderStyle);
             Rect view3Rect = new Rect(x3, contentY + 28f, col3Width, contentHeight - 28f);
 
             int trackTotal = currentTracks != null ? currentTracks.Count : 0;
@@ -502,7 +517,7 @@ namespace WorkableBoombox.UI
             }
             else
             {
-                GUI.Label(new Rect(10f, 10f, col3Width - 40f, 30f), BoomboxLocalization.IsRussian ? "Нет треков в плейлисте" : "No tracks in playlist", itemLabelStyle);
+                GUI.Label(new Rect(10f, 10f, col3Width - 40f, 30f), "No tracks in playlist", itemLabelStyle);
             }
 
             // Кнопка добавления трека [+]
@@ -521,14 +536,14 @@ namespace WorkableBoombox.UI
                 else
                 {
                     GUI.Box(new Rect(0, itemY, col3Width - 20f, 118f), GUIContent.none, windowStyle);
-                    GUI.Label(new Rect(6f, itemY + 2f, col3Width - 32f, 16f), BoomboxLocalization.IsRussian ? "Название трека:" : "Track Title:", itemLabelStyle);
+                    GUI.Label(new Rect(6f, itemY + 2f, col3Width - 32f, 16f), "Track Title:", itemLabelStyle);
                     newTrackTitleInput = GUI.TextField(new Rect(6f, itemY + 18f, col3Width - 32f, 20f), newTrackTitleInput, inputFieldStyle);
 
-                    GUI.Label(new Rect(6f, itemY + 40f, col3Width - 32f, 16f), BoomboxLocalization.IsRussian ? "Ссылка (YouTube / local:трек.mp3):" : "URL (YouTube / local:track.mp3):", itemLabelStyle);
+                    GUI.Label(new Rect(6f, itemY + 40f, col3Width - 32f, 16f), "URL (YouTube / local:track.mp3):", itemLabelStyle);
                     newTrackUrlInput = GUI.TextField(new Rect(6f, itemY + 56f, col3Width - 32f, 20f), newTrackUrlInput, inputFieldStyle);
 
                     float halfTrackW = (col3Width - 44f) * 0.5f;
-                    if (GUI.Button(new Rect(6f, itemY + 82f, halfTrackW, 24f), BoomboxLocalization.IsRussian ? "✓ Добавить" : "✓ Add", actionButtonStyle))
+                    if (GUI.Button(new Rect(6f, itemY + 82f, halfTrackW, 24f), "✓ Add", actionButtonStyle))
                     {
                         if (!string.IsNullOrWhiteSpace(newTrackTitleInput) && !string.IsNullOrWhiteSpace(newTrackUrlInput))
                         {
@@ -538,7 +553,7 @@ namespace WorkableBoombox.UI
                             newTrackUrlInput = "";
                         }
                     }
-                    if (GUI.Button(new Rect(6f + halfTrackW + 8f, itemY + 82f, halfTrackW, 24f), BoomboxLocalization.IsRussian ? "✕ Отмена" : "✕ Cancel", cancelButtonStyle))
+                    if (GUI.Button(new Rect(6f + halfTrackW + 8f, itemY + 82f, halfTrackW, 24f), "✕ Cancel", cancelButtonStyle))
                     {
                         isAddingTrack = false;
                         newTrackTitleInput = "";
@@ -555,7 +570,7 @@ namespace WorkableBoombox.UI
 
             // Кнопка: Запустить весь плейлист
             Rect startPlRect = new Rect(x1, bottomY, 280f, btnHeight);
-            string startBtnText = BoomboxLocalization.IsRussian ? "▶ Запустить плейлист" : "▶ Play Entire Playlist";
+            string startBtnText = "▶ Play Entire Playlist";
             bool hasValidSelection = !string.IsNullOrEmpty(selectedPlayerNick) && !string.IsNullOrEmpty(selectedPlaylistName) && trackTotal > 0;
 
             if (GUI.Button(startPlRect, startBtnText, playButtonStyle))
@@ -568,7 +583,7 @@ namespace WorkableBoombox.UI
 
             // Кнопка: Перезагрузить плейлисты
             Rect reloadRect = new Rect(x1 + 290f, bottomY, 220f, btnHeight);
-            string reloadText = BoomboxLocalization.IsRussian ? "🔄 Обновить плейлисты (F5)" : "🔄 Reload Playlists (F5)";
+            string reloadText = "🔄 Reload Playlists (F5)";
             if (GUI.Button(reloadRect, reloadText, secondaryButtonStyle))
             {
                 PlaylistManager.Instance.ReloadAndSync();
@@ -576,7 +591,7 @@ namespace WorkableBoombox.UI
 
             // Подсказка снизу справа
             Rect hintRect = new Rect(posX + totalWidth - 300f, bottomY + 6f, 285f, 26f);
-            string hintText = BoomboxLocalization.IsRussian ? "[Клик по треку] = играть с него" : "[Click track] = play from here";
+            string hintText = "[Click track] = play from here";
             GUI.Label(hintRect, hintText, colHeaderStyle);
         }
 

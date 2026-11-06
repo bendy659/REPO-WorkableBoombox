@@ -225,6 +225,19 @@ namespace WorkableBoombox.Items
                     child.localRotation = Quaternion.Euler(0f, 180f, 0f) * child.localRotation;
                 }
 
+                // Корректируем центр захвата PhysGrabObject и коллайдеры на корне в соответствии с разворотом
+                PhysGrabObject originalPhysGrab = customPrefab.GetComponent<PhysGrabObject>();
+                if (originalPhysGrab != null)
+                {
+                    originalPhysGrab.centerPoint = Quaternion.Euler(0f, 180f, 0f) * originalPhysGrab.centerPoint;
+                }
+
+                BoxCollider rootBox = customPrefab.GetComponent<BoxCollider>();
+                if (rootBox != null)
+                {
+                    rootBox.center = Quaternion.Euler(0f, 180f, 0f) * rootBox.center;
+                }
+
                 // Сохраняем ссылки на динамики и свет
                 ValuableBoombox oldBoombox = customPrefab.GetComponent<ValuableBoombox>();
                 Transform sp1 = oldBoombox != null ? oldBoombox.speaker1 : null;
@@ -232,9 +245,25 @@ namespace WorkableBoombox.Items
                 Light lt1 = oldBoombox != null ? oldBoombox.light1 : null;
                 Light lt2 = oldBoombox != null ? oldBoombox.light2 : null;
 
-                // Изначально выключаем свет и свечение на префабе, чтобы бумбокс не горел желтым при спавне
-                if (lt1 != null) { lt1.enabled = false; lt1.intensity = 0f; }
-                if (lt2 != null) { lt2.enabled = false; lt2.intensity = 0f; }
+                // Настраиваем световые источники как яркие точечные источники света для светомузыки
+                if (lt1 != null)
+                {
+                    lt1.type = LightType.Point;
+                    lt1.range = 8.0f;
+                    lt1.shadows = LightShadows.None;
+                    lt1.renderMode = LightRenderMode.ForcePixel;
+                    lt1.enabled = false;
+                    lt1.intensity = 0f;
+                }
+                if (lt2 != null)
+                {
+                    lt2.type = LightType.Point;
+                    lt2.range = 8.0f;
+                    lt2.shadows = LightShadows.None;
+                    lt2.renderMode = LightRenderMode.ForcePixel;
+                    lt2.enabled = false;
+                    lt2.intensity = 0f;
+                }
                 if (sp1 != null)
                 {
                     Renderer r1 = sp1.GetComponent<Renderer>();
