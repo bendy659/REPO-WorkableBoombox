@@ -192,7 +192,19 @@ namespace WorkableBoombox.Audio
                             downloadReq.SetRequestHeader("Authorization", $"Bearer {token}");
                         }
 
-                        yield return downloadReq.SendWebRequest();
+                        var asyncOp = downloadReq.SendWebRequest();
+                        while (!asyncOp.isDone)
+                        {
+                            float pct = downloadReq.downloadProgress * 100f;
+                            ulong downloaded = downloadReq.downloadedBytes;
+                            string label = BoomboxLocalization.IsRussian ? "Загрузка" : "Downloading";
+                            string status = $"⏳ {label}: {item.Name} [ {downloaded / (1024f * 1024f):F2} MB / {item.Size / (1024f * 1024f):F2} MB - {pct:F0}% ]";
+                            if (BoomboxHUD.Instance != null)
+                            {
+                                BoomboxHUD.Instance.SetDownloadProgress(true, status);
+                            }
+                            yield return null;
+                        }
 
                         if (downloadReq.result == UnityWebRequest.Result.Success && downloadReq.downloadHandler.data != null && downloadReq.downloadHandler.data.Length > 0)
                         {
@@ -207,13 +219,30 @@ namespace WorkableBoombox.Audio
                         {
                             fallbackReq.certificateHandler = new BypassCertificate();
                             fallbackReq.SetRequestHeader("User-Agent", "WorkableBoombox-Mod");
-                            yield return fallbackReq.SendWebRequest();
+                            var fallbackOp = fallbackReq.SendWebRequest();
+                            while (!fallbackOp.isDone)
+                            {
+                                float pct = fallbackReq.downloadProgress * 100f;
+                                ulong downloaded = fallbackReq.downloadedBytes;
+                                string label = BoomboxLocalization.IsRussian ? "Загрузка" : "Downloading";
+                                string status = $"⏳ {label}: {item.Name} [ {downloaded / (1024f * 1024f):F2} MB / {item.Size / (1024f * 1024f):F2} MB - {pct:F0}% ]";
+                                if (BoomboxHUD.Instance != null)
+                                {
+                                    BoomboxHUD.Instance.SetDownloadProgress(true, status);
+                                }
+                                yield return null;
+                            }
 
                             if (fallbackReq.result == UnityWebRequest.Result.Success && fallbackReq.downloadHandler.data != null && fallbackReq.downloadHandler.data.Length > 0)
                             {
                                 fileBytes = fallbackReq.downloadHandler.data;
                             }
                         }
+                    }
+
+                    if (BoomboxHUD.Instance != null)
+                    {
+                        BoomboxHUD.Instance.SetDownloadProgress(false);
                     }
 
                     if (fileBytes != null && fileBytes.Length > 0)

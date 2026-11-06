@@ -9,6 +9,8 @@ using BepInEx;
 using UnityEngine;
 using UnityEngine.Networking;
 using WorkableBoombox.Config;
+using WorkableBoombox.Localization;
+using WorkableBoombox.UI;
 
 namespace WorkableBoombox.Audio
 {
@@ -235,7 +237,7 @@ namespace WorkableBoombox.Audio
 
                     // Скачиваем аудио через yt-dlp (с перекодированием в mp3 через ffmpeg)
                     Plugin.Log.LogInfo($"[YouTubeAudio] Запуск скачивания YouTube: {trackTitle} ({videoId})...");
-                    yield return DownloadYouTubeAudioCoroutine(ytDlpPath, ffmpegPath, source, videoId);
+                    yield return DownloadYouTubeAudioCoroutine(ytDlpPath, ffmpegPath, source, videoId, trackTitle);
 
                     if (!IsAudioCached(source, out cachedFile))
                     {
@@ -384,7 +386,7 @@ namespace WorkableBoombox.Audio
             }
         }
 
-        private IEnumerator DownloadYouTubeAudioCoroutine(string ytDlpPath, string ffmpegPath, string url, string videoId)
+        private IEnumerator DownloadYouTubeAudioCoroutine(string ytDlpPath, string ffmpegPath, string url, string videoId, string trackTitle)
         {
             if (activeDownloads.Contains(videoId))
             {
@@ -398,20 +400,28 @@ namespace WorkableBoombox.Audio
             activeDownloads.Add(videoId);
             bool isProcessDone = false;
 
+            string cleanTitle = !string.IsNullOrEmpty(trackTitle) ? trackTitle : videoId;
+            if (BoomboxHUD.Instance != null)
+            {
+                string label = BoomboxLocalization.IsRussian ? "Загрузка" : "Downloading";
+                BoomboxHUD.Instance.SetDownloadProgress(true, $"⏳ {label}: {cleanTitle}...");
+            }
+
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
                 {
                     string outputTemplate = Path.Combine(CacheDirectory, "%(id)s.%(ext)s");
+                    string progressTemplate = "%(progress._percent_str)s|%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str,progress._total_bytes_estimate_str)s";
                     string args;
                     if (File.Exists(ffmpegPath))
                     {
                         // При наличии ffmpeg конвертируем в чистый mp3, который без проблем декодируется Unity FMOD
-                        args = $"-x --audio-format mp3 --audio-quality 192K --ffmpeg-location \"{ffmpegPath}\" --no-playlist --no-check-certificates -o \"{outputTemplate}\" \"{url}\"";
+                        args = $"-x --audio-format mp3 --audio-quality 192K --ffmpeg-location \"{ffmpegPath}\" --no-playlist --no-check-certificates --newline --progress-template \"{progressTemplate}\" -o \"{outputTemplate}\" \"{url}\"";
                     }
                     else
                     {
-                        args = $"-f \"ba[ext=m4a]/ba/b\" --no-playlist --no-check-certificates -o \"{outputTemplate}\" \"{url}\"";
+                        args = $"-f \"ba[ext=m4a]/ba/b\" --no-playlist --no-check-certificates --newline --progress-template \"{progressTemplate}\" -o \"{outputTemplate}\" \"{url}\"";
                     }
 
                     ProcessStartInfo psi = new ProcessStartInfo
@@ -424,9 +434,38 @@ namespace WorkableBoombox.Audio
                         RedirectStandardError = true
                     };
 
-                    using (Process proc = Process.Start(psi))
+                    using (Process proc = new Process())
                     {
-                        proc.WaitForExit(60000); // Тайм-аут 60 секунд
+                        proc.StartInfo = psi;
+                        proc.OutputDataReceived += (s, e) =>
+                        {
+                            if (string.IsNullOrEmpty(e.Data)) return;
+                            string line = e.Data.Trim();
+                            if (line.Contains("|"))
+                            {
+                                string[] parts = line.Split('|');
+                                if (parts.Length >= 3)
+                                {
+                                    string pct = parts[0].Trim();
+                                    string downloaded = parts[1].Trim();
+                                    string total = parts[2].Trim();
+                                    if (downloaded != "NA" && total != "NA")
+                                    {
+                                        string label = BoomboxLocalization.IsRussian ? "Загрузка" : "Downloading";
+                                        string msg = $"⏳ {label}: {cleanTitle} [ {downloaded} / {total} - {pct} ]";
+                                        if (BoomboxHUD.Instance != null)
+                                        {
+                                            BoomboxHUD.Instance.SetDownloadProgress(true, msg);
+                                        }
+                                    }
+                                }
+                            }
+                        };
+
+                        proc.Start();
+                        proc.BeginOutputReadLine();
+                        proc.WaitForExit(90000); // Тайм-аут 90 секунд
+
                         if (proc.ExitCode == 0)
                         {
                             Plugin.Log.LogInfo($"[YouTubeAudio] Завершена загрузка {videoId}");
@@ -444,6 +483,10 @@ namespace WorkableBoombox.Audio
                 }
                 finally
                 {
+                    if (BoomboxHUD.Instance != null)
+                    {
+                        BoomboxHUD.Instance.SetDownloadProgress(false);
+                    }
                     isProcessDone = true;
                 }
             });

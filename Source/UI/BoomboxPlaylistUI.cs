@@ -34,6 +34,7 @@ namespace WorkableBoombox.UI
         private Texture2D selectedBgTexture;
         private Texture2D buttonBgTexture;
         private Texture2D headerBgTexture;
+        private Texture2D deleteBgTexture;
 
         private GUIStyle windowStyle;
         private GUIStyle headerTitleStyle;
@@ -45,6 +46,7 @@ namespace WorkableBoombox.UI
         private GUIStyle inputFieldStyle;
         private GUIStyle actionButtonStyle;
         private GUIStyle cancelButtonStyle;
+        private GUIStyle deleteButtonStyle;
 
         private void Awake()
         {
@@ -66,6 +68,7 @@ namespace WorkableBoombox.UI
             selectedBgTexture = MakeColorTexture(new Color(0.12f, 0.35f, 0.50f, 0.85f));
             buttonBgTexture = MakeColorTexture(new Color(0.15f, 0.45f, 0.30f, 0.90f));
             headerBgTexture = MakeColorTexture(new Color(0.10f, 0.12f, 0.18f, 0.95f));
+            deleteBgTexture = MakeColorTexture(new Color(0.55f, 0.15f, 0.15f, 0.90f));
         }
 
         private Texture2D MakeColorTexture(Color col)
@@ -252,6 +255,15 @@ namespace WorkableBoombox.UI
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter
             };
+
+            deleteButtonStyle = new GUIStyle(GUI.skin.button)
+            {
+                normal = { background = deleteBgTexture, textColor = new Color(1f, 0.45f, 0.45f) },
+                hover = { textColor = Color.white },
+                fontStyle = FontStyle.Bold,
+                fontSize = 11,
+                alignment = TextAnchor.MiddleCenter
+            };
         }
 
         private void OnGUI()
@@ -370,18 +382,35 @@ namespace WorkableBoombox.UI
             itemY = 0f;
             if (currentPlayerPlaylists != null)
             {
-                foreach (var kvp in currentPlayerPlaylists)
+                var plSnapshot = new List<KeyValuePair<string, Dictionary<string, string>>>(currentPlayerPlaylists);
+                foreach (var kvp in plSnapshot)
                 {
                     string plName = kvp.Key;
                     int trackCount = kvp.Value != null ? kvp.Value.Count : 0;
                     bool isSelected = string.Equals(selectedPlaylistName, plName, StringComparison.OrdinalIgnoreCase);
 
                     string label = $"{plName} [{trackCount}]";
-                    if (GUI.Button(new Rect(0, itemY, col2Width - 20f, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                    float btnWidth = isLocalPlayerSelected ? (col2Width - 52f) : (col2Width - 20f);
+
+                    if (GUI.Button(new Rect(0, itemY, btnWidth, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
                     {
                         selectedPlaylistName = plName;
                         selectedTrackIndex = 0;
                     }
+
+                    if (isLocalPlayerSelected)
+                    {
+                        if (GUI.Button(new Rect(col2Width - 48f, itemY, 26f, 28f), "✕", deleteButtonStyle))
+                        {
+                            PlaylistManager.Instance.RemovePlaylist(plName);
+                            if (string.Equals(selectedPlaylistName, plName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                selectedPlaylistName = null;
+                            }
+                            break;
+                        }
+                    }
+
                     itemY += 30f;
                 }
             }
@@ -439,7 +468,8 @@ namespace WorkableBoombox.UI
             if (currentTracks != null)
             {
                 int idx = 0;
-                foreach (var trackKvp in currentTracks)
+                var trackSnapshot = new List<KeyValuePair<string, string>>(currentTracks);
+                foreach (var trackKvp in trackSnapshot)
                 {
                     string tName = trackKvp.Key;
                     string tUrl = trackKvp.Value;
@@ -448,12 +478,24 @@ namespace WorkableBoombox.UI
                     string prefix = tUrl.StartsWith("local:", StringComparison.OrdinalIgnoreCase) ? "📁 " : "▶ ";
                     string label = $"{idx + 1}. {prefix}{tName}";
 
-                    if (GUI.Button(new Rect(0, itemY, col3Width - 20f, 26f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                    float btnWidth = isLocalPlayerSelected ? (col3Width - 52f) : (col3Width - 20f);
+
+                    if (GUI.Button(new Rect(0, itemY, btnWidth, 26f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
                     {
                         selectedTrackIndex = idx;
                         // Клик по треку = сразу начать воспроизведение с выбранного трека!
                         StartPlayback(idx);
                     }
+
+                    if (isLocalPlayerSelected)
+                    {
+                        if (GUI.Button(new Rect(col3Width - 48f, itemY, 26f, 26f), "✕", deleteButtonStyle))
+                        {
+                            PlaylistManager.Instance.RemoveTrackFromPlaylist(selectedPlaylistName, tName);
+                            break;
+                        }
+                    }
+
                     itemY += 28f;
                     idx++;
                 }

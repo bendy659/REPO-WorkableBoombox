@@ -232,6 +232,20 @@ namespace WorkableBoombox.Items
                 Light lt1 = oldBoombox != null ? oldBoombox.light1 : null;
                 Light lt2 = oldBoombox != null ? oldBoombox.light2 : null;
 
+                // Изначально выключаем свет и свечение на префабе, чтобы бумбокс не горел желтым при спавне
+                if (lt1 != null) { lt1.enabled = false; lt1.intensity = 0f; }
+                if (lt2 != null) { lt2.enabled = false; lt2.intensity = 0f; }
+                if (sp1 != null)
+                {
+                    Renderer r1 = sp1.GetComponent<Renderer>();
+                    if (r1 != null && r1.material != null) r1.material.SetColor("_EmissionColor", Color.black);
+                }
+                if (sp2 != null)
+                {
+                    Renderer r2 = sp2.GetComponent<Renderer>();
+                    if (r2 != null && r2.material != null) r2.material.SetColor("_EmissionColor", Color.black);
+                }
+
                 // Удаляем ванильную логику ловушки и мусора
                 Trap oldTrap = customPrefab.GetComponent<Trap>();
                 ValuableObject oldVal = customPrefab.GetComponent<ValuableObject>();
@@ -291,6 +305,7 @@ namespace WorkableBoombox.Items
                 if (sp1 != null) boomboxComp.SpeakerRenderer1 = sp1.GetComponent<Renderer>();
                 if (sp2 != null) boomboxComp.SpeakerRenderer2 = sp2.GetComponent<Renderer>();
                 boomboxComp.PhysGrabObject = physGrab;
+                boomboxComp.enabled = true;
 
                 // Деактивируем мастер-шаблон
                 customPrefab.SetActive(false);

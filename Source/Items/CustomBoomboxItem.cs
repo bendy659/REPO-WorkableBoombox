@@ -95,11 +95,12 @@ namespace WorkableBoombox.Items
                 Collider[] masterCols = GetComponentsInChildren<Collider>(true);
                 foreach (var c in masterCols) c.enabled = false;
                 if (PhysGrabObject != null) PhysGrabObject.enabled = false;
-                enabled = false;
                 return;
             }
 
-            // На реальных экземплярах бумбокса гарантируем активные коллизии и физику
+            // На реальных экземплярах бумбокса гарантируем активность компонента, коллизии и физику
+            enabled = true;
+
             Rigidbody rb = GetComponent<Rigidbody>();
             if (rb != null)
             {
@@ -122,7 +123,38 @@ namespace WorkableBoombox.Items
                 impact.destroyDisable = true;
             }
 
+            // Находим и сохраняем ссылки на динамики и свет, если они отсутствуют
+            if (Light1 == null || Light2 == null)
+            {
+                Light[] allLights = GetComponentsInChildren<Light>(true);
+                if (allLights.Length > 0) Light1 = allLights[0];
+                if (allLights.Length > 1) Light2 = allLights[1];
+            }
+
+            if (Speaker1 == null || Speaker2 == null)
+            {
+                Transform[] transforms = GetComponentsInChildren<Transform>(true);
+                foreach (Transform t in transforms)
+                {
+                    if (t.name.IndexOf("speaker1", StringComparison.OrdinalIgnoreCase) >= 0) Speaker1 = t;
+                    else if (t.name.IndexOf("speaker2", StringComparison.OrdinalIgnoreCase) >= 0) Speaker2 = t;
+                }
+            }
+
+            if (Speaker1 != null && SpeakerRenderer1 == null) SpeakerRenderer1 = Speaker1.GetComponent<Renderer>();
+            if (Speaker2 != null && SpeakerRenderer2 == null) SpeakerRenderer2 = Speaker2.GetComponent<Renderer>();
+
+            // Изначально выключаем свет и свечение на реальном экземпляре, чтобы он не горел желтым при спавне
+            if (Light1 != null) { Light1.enabled = false; Light1.intensity = 0f; }
+            if (Light2 != null) { Light2.enabled = false; Light2.intensity = 0f; }
+            if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null) SpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
+            if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null) SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+
             initialBodyScale = transform.localScale;
+            if (initialBodyScale.sqrMagnitude < 0.001f)
+            {
+                initialBodyScale = Vector3.one;
+            }
 
             CurrentLoopMode = (LoopMode)Mathf.Clamp(ModConfig.DefaultLoopMode.Value, 0, 2);
             ShuffleEnabled = ModConfig.DefaultShuffle.Value;
@@ -264,11 +296,6 @@ namespace WorkableBoombox.Items
                     }
                     catch { }
                 }
-            }
-
-            if (transform.localScale.magnitude < initialBodyScale.magnitude * 0.85f)
-            {
-                return true;
             }
 
             return false;
@@ -1235,7 +1262,7 @@ namespace WorkableBoombox.Items
                 pocketVisual.name = "PocketBoomboxVisual_" + gameObject.name;
                 pocketVisual.transform.localScale = Vector3.one * 0.45f;
 
-                // Удаляем всю физику, коллайдеры и сетевые компоненты с косметической копии
+                // Удаляем скрипты, физику и коллайдеры с косметической копии
                 foreach (Component comp in pocketVisual.GetComponentsInChildren<Component>(true))
                 {
                     if (comp is PhysGrabObject || comp is Rigidbody || comp is Collider ||
@@ -1243,7 +1270,7 @@ namespace WorkableBoombox.Items
                         comp is CustomBoomboxItem || comp is RoomVolumeCheck || comp is ItemToggle ||
                         comp is PhysGrabObjectImpactDetector)
                     {
-                        UnityEngine.Object.Destroy(comp);
+                        UnityEngine.Object.DestroyImmediate(comp);
                     }
                 }
 
@@ -1251,16 +1278,22 @@ namespace WorkableBoombox.Items
                 Transform[] allTransforms = pocketVisual.GetComponentsInChildren<Transform>(true);
                 foreach (Transform t in allTransforms)
                 {
-                    if (t.name == "speaker1" || (Speaker1 != null && t.name == Speaker1.name)) pocketSpeaker1 = t;
-                    if (t.name == "speaker2" || (Speaker2 != null && t.name == Speaker2.name)) pocketSpeaker2 = t;
+                    if (t.name.IndexOf("speaker1", StringComparison.OrdinalIgnoreCase) >= 0) pocketSpeaker1 = t;
+                    if (t.name.IndexOf("speaker2", StringComparison.OrdinalIgnoreCase) >= 0) pocketSpeaker2 = t;
                 }
 
                 Light[] lights = pocketVisual.GetComponentsInChildren<Light>(true);
                 if (lights.Length > 0) pocketLight1 = lights[0];
                 if (lights.Length > 1) pocketLight2 = lights[1];
 
+                if (pocketLight1 != null) { pocketLight1.enabled = false; pocketLight1.intensity = 0f; }
+                if (pocketLight2 != null) { pocketLight2.enabled = false; pocketLight2.intensity = 0f; }
+
                 if (pocketSpeaker1 != null) pocketSpeakerRenderer1 = pocketSpeaker1.GetComponent<Renderer>();
                 if (pocketSpeaker2 != null) pocketSpeakerRenderer2 = pocketSpeaker2.GetComponent<Renderer>();
+
+                if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null) pocketSpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
+                if (pocketSpeakerRenderer2 != null && pocketSpeakerRenderer2.material != null) pocketSpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
 
                 pocketAudioSource = pocketVisual.GetComponent<AudioSource>();
                 if (pocketAudioSource == null)
@@ -1288,7 +1321,20 @@ namespace WorkableBoombox.Items
             InitPocketVisual();
             if (pocketVisual == null) return;
 
-            PlayerAvatar owner = ItemEquippable.GetOwnerPlayerAvatar();
+            PlayerAvatar owner = null;
+            if (ItemEquippable != null)
+            {
+                owner = ItemEquippable.GetOwnerPlayerAvatar();
+            }
+            if (owner == null)
+            {
+                owner = SemiFunc.PlayerAvatarLocal();
+            }
+            if (owner == null && PlayerAvatar.instance != null)
+            {
+                owner = PlayerAvatar.instance;
+            }
+
             if (owner == null)
             {
                 if (pocketVisual.activeSelf) pocketVisual.SetActive(false);

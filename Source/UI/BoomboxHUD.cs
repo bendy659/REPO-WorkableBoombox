@@ -28,6 +28,9 @@ namespace WorkableBoombox.UI
         private float trackNotificationTimer;
         private string trackNotificationText = "";
 
+        private bool isDownloading;
+        private string downloadStatusText = "";
+
         private GUIStyle promptBoxStyle;
         private GUIStyle titleStyle;
         private GUIStyle hotkeyStyle;
@@ -118,21 +121,28 @@ namespace WorkableBoombox.UI
             trackNotificationText = title;
         }
 
+        public void SetDownloadProgress(bool downloading, string statusText = "")
+        {
+            isDownloading = downloading;
+            downloadStatusText = statusText;
+        }
+
         private void OnGUI()
         {
             InitStyles();
 
-            // 1. Уведомление о переключении трека или режима (сверху экрана)
-            if (showTrackNotification)
+            // 1. Уведомление о загрузке трека или переключении трека/режима (сверху экрана)
+            if (isDownloading || showTrackNotification)
             {
-                float trackWidth = 460f;
+                string displayText = isDownloading ? downloadStatusText : trackNotificationText;
+                float trackWidth = 560f;
                 float trackHeight = 45f;
                 float trackX = (Screen.width - trackWidth) * 0.5f;
                 float trackY = 60f;
 
                 Rect trackRect = new Rect(trackX, trackY, trackWidth, trackHeight);
                 GUI.Box(trackRect, GUIContent.none, promptBoxStyle);
-                GUI.Label(trackRect, trackNotificationText, trackNotificationStyle);
+                GUI.Label(trackRect, displayText, trackNotificationStyle);
             }
 
             // 2. Уведомление о громкости (по центру снизу)
