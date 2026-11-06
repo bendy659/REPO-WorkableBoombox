@@ -1,7 +1,8 @@
 # Workable Boombox for R.E.P.O.
 
-[![Thunderstore](https://img.shields.io/badge/Thunderstore-WorkableBoombox-blue)](https://thunderstore.io)
-[![Game](https://img.shields.io/badge/Game-R.E.P.O.-orange)](https://store.steampowered.com)
+[![GitHub](https://img.shields.io/badge/GitHub-REPO--WorkableBoombox-181717?logo=github)](https://github.com/bendy659/REPO-WorkableBoombox)
+[![Thunderstore](https://img.shields.io/badge/Thunderstore-WorkableBoombox-blue)](https://thunderstore.io/c/repo/)
+[![Game](https://img.shields.io/badge/Game-R.E.P.O.-orange)](https://store.steampowered.com/app/3241660/REPO/)
 
 A fully featured, networked portable boombox mod for **R.E.P.O.** with custom music support, track management, volume controls, audio scrubbing, RGB light show, customizable HUD overlay, and automatic online sync via private/public GitHub repositories.
 

@@ -1,7 +1,7 @@
 {
   "name": "WorkableBoombox",
   "version_number": "1.0.0",
-  "website_url": "https://github.com/bendy659/repo-workableboombox-tracks",
+  "website_url": "https://github.com/bendy659/REPO-WorkableBoombox",
   "description": "A fully functional portable boombox with custom music, track manager, volume control, and online GitHub sync for R.E.P.O.",
   "dependencies": [
     "BepInEx-BepInExPack-5.4.2305",
