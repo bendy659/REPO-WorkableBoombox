@@ -15,3 +15,8 @@
 ## Local boombox tracks & sync metadata
 Tracks/
 .sync_metadata.json
+
+## Secrets & tokens
+*.token
+*.key
+.thunderstore_token
