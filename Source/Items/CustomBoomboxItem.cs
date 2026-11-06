@@ -94,6 +94,7 @@ namespace WorkableBoombox.Items
                 if (masterRb != null) { masterRb.isKinematic = true; masterRb.detectCollisions = false; }
                 Collider[] masterCols = GetComponentsInChildren<Collider>(true);
                 foreach (var c in masterCols) c.enabled = false;
+                if (PhysGrabObject != null) PhysGrabObject.enabled = false;
                 enabled = false;
                 return;
             }
@@ -109,6 +110,16 @@ namespace WorkableBoombox.Items
             foreach (var c in cols)
             {
                 c.enabled = true;
+            }
+
+            if (PhysGrabObject != null)
+            {
+                PhysGrabObject.enabled = true;
+            }
+            PhysGrabObjectImpactDetector impact = GetComponent<PhysGrabObjectImpactDetector>();
+            if (impact != null)
+            {
+                impact.destroyDisable = true;
             }
 
             initialBodyScale = transform.localScale;
@@ -1305,7 +1316,7 @@ namespace WorkableBoombox.Items
             // Небольшой левитирующий боб-эффект
             float bob = Mathf.Sin(Time.time * 2.5f) * 0.03f;
             Vector3 targetPos = anchor.position - anchor.forward * 0.32f + anchor.up * (0.16f + bob) + anchor.right * 0.22f;
-            Quaternion targetRot = anchor.rotation * Quaternion.Euler(0f, 180f, 0f);
+            Quaternion targetRot = anchor.rotation;
 
             pocketVisual.transform.position = Vector3.Lerp(pocketVisual.transform.position, targetPos, Time.deltaTime * 20f);
             pocketVisual.transform.rotation = Quaternion.Slerp(pocketVisual.transform.rotation, targetRot, Time.deltaTime * 20f);

@@ -247,5 +247,98 @@ namespace WorkableBoombox.Playlists
 
             return list;
         }
+
+        public void SaveLocalPlaylists()
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(LocalPlaylists, Formatting.Indented);
+                File.WriteAllText(MasterPlaylistsFile, json);
+                Plugin.Log.LogInfo($"[PlaylistManager] Локальные плейлисты успешно сохранены в {MasterPlaylistsFile}");
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogError($"[PlaylistManager] Ошибка при сохранении плейлистов: {ex.Message}");
+            }
+
+            SyncLocalPlaylistsToRoom();
+        }
+
+        public bool AddPlaylist(string playlistName)
+        {
+            if (string.IsNullOrWhiteSpace(playlistName))
+            {
+                return false;
+            }
+
+            playlistName = playlistName.Trim();
+            if (!LocalPlaylists.ContainsKey(playlistName))
+            {
+                LocalPlaylists[playlistName] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                SaveLocalPlaylists();
+                Plugin.Log.LogInfo($"[PlaylistManager] Создан новый локальный плейлист: '{playlistName}'");
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool AddTrackToPlaylist(string playlistName, string trackTitle, string trackUrl)
+        {
+            if (string.IsNullOrWhiteSpace(playlistName) || string.IsNullOrWhiteSpace(trackTitle) || string.IsNullOrWhiteSpace(trackUrl))
+            {
+                return false;
+            }
+
+            playlistName = playlistName.Trim();
+            trackTitle = trackTitle.Trim();
+            trackUrl = trackUrl.Trim();
+
+            if (!LocalPlaylists.TryGetValue(playlistName, out var tracks))
+            {
+                tracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                LocalPlaylists[playlistName] = tracks;
+            }
+
+            tracks[trackTitle] = trackUrl;
+            SaveLocalPlaylists();
+            Plugin.Log.LogInfo($"[PlaylistManager] В плейлист '{playlistName}' добавлен трек: '{trackTitle}' -> {trackUrl}");
+            return true;
+        }
+
+        public bool RemovePlaylist(string playlistName)
+        {
+            if (string.IsNullOrWhiteSpace(playlistName))
+            {
+                return false;
+            }
+
+            if (LocalPlaylists.Remove(playlistName.Trim()))
+            {
+                SaveLocalPlaylists();
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool RemoveTrackFromPlaylist(string playlistName, string trackTitle)
+        {
+            if (string.IsNullOrWhiteSpace(playlistName) || string.IsNullOrWhiteSpace(trackTitle))
+            {
+                return false;
+            }
+
+            if (LocalPlaylists.TryGetValue(playlistName.Trim(), out var tracks))
+            {
+                if (tracks.Remove(trackTitle.Trim()))
+                {
+                    SaveLocalPlaylists();
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

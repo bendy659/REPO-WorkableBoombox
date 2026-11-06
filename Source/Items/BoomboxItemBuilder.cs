@@ -215,8 +215,15 @@ namespace WorkableBoombox.Items
                 GameObject customPrefab = UnityEngine.Object.Instantiate(original);
                 customPrefab.name = "WorkableBoomboxItem";
                 UnityEngine.Object.DontDestroyOnLoad(customPrefab);
-                customPrefab.transform.position = new Vector3(0f, -9999f, 0f);
-                customPrefab.SetActive(true);
+                customPrefab.transform.position = new Vector3(0f, 500f, 0f);
+
+                // Поворачиваем визуальную часть на 180 градусов по Y, чтобы бумбокс всегда смотрел динамиками на игрока
+                for (int i = 0; i < customPrefab.transform.childCount; i++)
+                {
+                    Transform child = customPrefab.transform.GetChild(i);
+                    child.localPosition = Quaternion.Euler(0f, 180f, 0f) * child.localPosition;
+                    child.localRotation = Quaternion.Euler(0f, 180f, 0f) * child.localRotation;
+                }
 
                 // Сохраняем ссылки на динамики и свет
                 ValuableBoombox oldBoombox = customPrefab.GetComponent<ValuableBoombox>();
@@ -233,17 +240,46 @@ namespace WorkableBoombox.Items
                 if (oldTrap != null) UnityEngine.Object.DestroyImmediate(oldTrap);
                 if (oldVal != null) UnityEngine.Object.DestroyImmediate(oldVal);
 
+                // Сетевая синхронизация через PhotonTransformView
+                PhotonTransformView ptv = customPrefab.GetComponent<PhotonTransformView>();
+                if (ptv == null)
+                {
+                    ptv = customPrefab.AddComponent<PhotonTransformView>();
+                }
+
+                PhotonView pv = customPrefab.GetComponent<PhotonView>();
+                if (pv != null && ptv != null)
+                {
+                    if (pv.ObservedComponents == null)
+                    {
+                        pv.ObservedComponents = new List<Component>();
+                    }
+                    if (!pv.ObservedComponents.Contains(ptv))
+                    {
+                        pv.ObservedComponents.Add(ptv);
+                    }
+                }
+
                 // PhysGrabObjectImpactDetector критически важен: PhysGrabber.GridObjectsInstantiate требует его наличия при взятии в руки
                 PhysGrabObjectImpactDetector impact = customPrefab.GetComponent<PhysGrabObjectImpactDetector>();
                 if (impact == null)
                 {
                     impact = customPrefab.AddComponent<PhysGrabObjectImpactDetector>();
                 }
-                impact.destroyDisable = true;
+                impact.destroyDisable = false; // Отключаем на шаблоне, чтобы не триггерить анти-воид телепорт
                 impact.isValuable = false;
                 impact.isCart = false;
                 impact.durability = float.MaxValue;
                 impact.fragility = 0f;
+
+                PhysGrabObject physGrab = customPrefab.GetComponent<PhysGrabObject>();
+                if (physGrab != null)
+                {
+                    physGrab.enabled = false; // Отключаем PhysGrabObject на мастер-шаблоне
+                }
+
+                // Присваиваем шаблон ДО добавления CustomBoomboxItem, чтобы Awake() распознал мастер-префаб
+                RegisteredPrefab = customPrefab;
 
                 // Добавляем CustomBoomboxItem
                 CustomBoomboxItem boomboxComp = customPrefab.AddComponent<CustomBoomboxItem>();
@@ -254,9 +290,10 @@ namespace WorkableBoombox.Items
 
                 if (sp1 != null) boomboxComp.SpeakerRenderer1 = sp1.GetComponent<Renderer>();
                 if (sp2 != null) boomboxComp.SpeakerRenderer2 = sp2.GetComponent<Renderer>();
-
-                PhysGrabObject physGrab = customPrefab.GetComponent<PhysGrabObject>();
                 boomboxComp.PhysGrabObject = physGrab;
+
+                // Деактивируем мастер-шаблон
+                customPrefab.SetActive(false);
 
                 // Настраиваем ItemAttributes и проверки комнат/магазина
                 ItemAttributes attr = customPrefab.GetComponent<ItemAttributes>();

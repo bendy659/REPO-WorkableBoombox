@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Text.RegularExpressions;
 using BepInEx;
 using UnityEngine;
@@ -85,20 +86,87 @@ namespace WorkableBoombox.Audio
             return Path.Combine(Paths.ConfigPath, "WorkableBoombox", "yt-dlp.exe");
         }
 
+        public static string GetFFmpegPath()
+        {
+            string[] candidatePaths = new[]
+            {
+                Path.Combine(Paths.ConfigPath, "WorkableBoombox", "ffmpeg.exe"),
+                Path.Combine(Paths.PluginPath, "WorkableBoombox", "ffmpeg.exe"),
+                Path.Combine(Paths.PluginPath, "bendy659-WorkableBoombox", "ffmpeg.exe"),
+                Path.Combine(Path.GetDirectoryName(typeof(YouTubeAudioProvider).Assembly.Location) ?? "", "ffmpeg.exe")
+            };
+
+            foreach (string path in candidatePaths)
+            {
+                if (File.Exists(path))
+                {
+                    return path;
+                }
+            }
+
+            return Path.Combine(Paths.ConfigPath, "WorkableBoombox", "ffmpeg.exe");
+        }
+
+        public static bool TryConvertWithFFmpeg(string ffmpegPath, string inputFile, string outputFile)
+        {
+            try
+            {
+                if (!File.Exists(ffmpegPath) || !File.Exists(inputFile)) return false;
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = $"-i \"{inputFile}\" -codec:a libmp3lame -qscale:a 2 \"{outputFile}\" -y",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true
+                };
+
+                using (Process proc = Process.Start(psi))
+                {
+                    proc.WaitForExit(20000);
+                    return proc.ExitCode == 0 && File.Exists(outputFile);
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"[YouTubeAudio] Ошибка при транскодировании через ffmpeg: {ex.Message}");
+                return false;
+            }
+        }
+
         public bool IsAudioCached(string source, out string cachedFilePath)
         {
             cachedFilePath = null;
 
             if (IsYouTubeUrl(source, out string videoId))
             {
-                string[] exts = new[] { ".m4a", ".mp3", ".ogg", ".wav" };
-                foreach (string ext in exts)
+                // Приоритетно ищем MP3, так как Unity FMOD декодирует его без ошибок
+                string[] preferredExts = new[] { ".mp3", ".ogg", ".wav" };
+                foreach (string ext in preferredExts)
                 {
                     string candidate = Path.Combine(CacheDirectory, videoId + ext);
                     if (File.Exists(candidate) && new FileInfo(candidate).Length > 1024)
                     {
                         cachedFilePath = candidate;
                         return true;
+                    }
+                }
+
+                // Если в кэше остался старый .m4a, пробуем сконвертировать его в .mp3 на лету
+                string m4aCandidate = Path.Combine(CacheDirectory, videoId + ".m4a");
+                if (File.Exists(m4aCandidate) && new FileInfo(m4aCandidate).Length > 1024)
+                {
+                    string ffmpegPath = GetFFmpegPath();
+                    if (File.Exists(ffmpegPath))
+                    {
+                        string mp3Candidate = Path.Combine(CacheDirectory, videoId + ".mp3");
+                        if (TryConvertWithFFmpeg(ffmpegPath, m4aCandidate, mp3Candidate))
+                        {
+                            cachedFilePath = mp3Candidate;
+                            return true;
+                        }
                     }
                 }
             }
@@ -157,9 +225,17 @@ namespace WorkableBoombox.Audio
                         yield break;
                     }
 
-                    // Скачиваем аудио через yt-dlp
+                    // Проверяем наличие ffmpeg.exe для надежного декодирования MP3 в FMOD
+                    string ffmpegPath = GetFFmpegPath();
+                    if (!File.Exists(ffmpegPath))
+                    {
+                        Plugin.Log.LogInfo("[YouTubeAudio] ffmpeg.exe не найден. Начинаем автоматическую загрузку ffmpeg...");
+                        yield return DownloadFFmpegCoroutine(ffmpegPath);
+                    }
+
+                    // Скачиваем аудио через yt-dlp (с перекодированием в mp3 через ffmpeg)
                     Plugin.Log.LogInfo($"[YouTubeAudio] Запуск скачивания YouTube: {trackTitle} ({videoId})...");
-                    yield return DownloadYouTubeAudioCoroutine(ytDlpPath, source, videoId);
+                    yield return DownloadYouTubeAudioCoroutine(ytDlpPath, ffmpegPath, source, videoId);
 
                     if (!IsAudioCached(source, out cachedFile))
                     {
@@ -260,7 +336,55 @@ namespace WorkableBoombox.Audio
             }
         }
 
-        private IEnumerator DownloadYouTubeAudioCoroutine(string ytDlpPath, string url, string videoId)
+        private IEnumerator DownloadFFmpegCoroutine(string destinationPath)
+        {
+            string url = "https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v4.4.1/ffmpeg-4.4.1-win-64.zip";
+            string tempZip = Path.Combine(Paths.ConfigPath, "WorkableBoombox", "ffmpeg_temp.zip");
+
+            using (UnityWebRequest req = UnityWebRequest.Get(url))
+            {
+                req.certificateHandler = new ForceAcceptAllCertificate();
+                req.downloadHandler = new DownloadHandlerFile(tempZip);
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    Plugin.Log.LogInfo("[YouTubeAudio] ffmpeg.zip успешно скачан. Распаковка...");
+                    try
+                    {
+                        using (ZipArchive archive = ZipFile.OpenRead(tempZip))
+                        {
+                            foreach (ZipArchiveEntry entry in archive.Entries)
+                            {
+                                if (string.Equals(entry.Name, "ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    entry.ExtractToFile(destinationPath, true);
+                                    Plugin.Log.LogInfo($"[YouTubeAudio] ffmpeg.exe успешно распакован в {destinationPath}!");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Plugin.Log.LogError($"[YouTubeAudio] Ошибка при распаковке ffmpeg: {ex.Message}");
+                    }
+                    finally
+                    {
+                        if (File.Exists(tempZip))
+                        {
+                            try { File.Delete(tempZip); } catch { }
+                        }
+                    }
+                }
+                else
+                {
+                    Plugin.Log.LogError($"[YouTubeAudio] Ошибка загрузки ffmpeg.zip: {req.error}");
+                }
+            }
+        }
+
+        private IEnumerator DownloadYouTubeAudioCoroutine(string ytDlpPath, string ffmpegPath, string url, string videoId)
         {
             if (activeDownloads.Contains(videoId))
             {
@@ -279,8 +403,16 @@ namespace WorkableBoombox.Audio
                 try
                 {
                     string outputTemplate = Path.Combine(CacheDirectory, "%(id)s.%(ext)s");
-                    // Скачиваем поток m4a (aac) без перекодирования - это быстрее всего
-                    string args = $"-f \"ba[ext=m4a]/ba/b\" --no-playlist --no-check-certificates -o \"{outputTemplate}\" \"{url}\"";
+                    string args;
+                    if (File.Exists(ffmpegPath))
+                    {
+                        // При наличии ffmpeg конвертируем в чистый mp3, который без проблем декодируется Unity FMOD
+                        args = $"-x --audio-format mp3 --audio-quality 192K --ffmpeg-location \"{ffmpegPath}\" --no-playlist --no-check-certificates -o \"{outputTemplate}\" \"{url}\"";
+                    }
+                    else
+                    {
+                        args = $"-f \"ba[ext=m4a]/ba/b\" --no-playlist --no-check-certificates -o \"{outputTemplate}\" \"{url}\"";
+                    }
 
                     ProcessStartInfo psi = new ProcessStartInfo
                     {
@@ -294,7 +426,7 @@ namespace WorkableBoombox.Audio
 
                     using (Process proc = Process.Start(psi))
                     {
-                        proc.WaitForExit(30000); // Тайм-аут 30 секунд
+                        proc.WaitForExit(60000); // Тайм-аут 60 секунд
                         if (proc.ExitCode == 0)
                         {
                             Plugin.Log.LogInfo($"[YouTubeAudio] Завершена загрузка {videoId}");
@@ -329,11 +461,7 @@ namespace WorkableBoombox.Audio
             string ext = Path.GetExtension(filePath).ToLowerInvariant();
             AudioType aType = AudioType.UNKNOWN;
 
-            if (ext == ".m4a" || ext == ".aac")
-            {
-                aType = AudioType.ACC;
-            }
-            else if (ext == ".mp3")
+            if (ext == ".mp3")
             {
                 aType = AudioType.MPEG;
             }
@@ -344,6 +472,20 @@ namespace WorkableBoombox.Audio
             else if (ext == ".wav")
             {
                 aType = AudioType.WAV;
+            }
+            else if (ext == ".m4a" || ext == ".aac")
+            {
+                string ffmpegPath = GetFFmpegPath();
+                string mp3Target = Path.ChangeExtension(filePath, ".mp3");
+                if (TryConvertWithFFmpeg(ffmpegPath, filePath, mp3Target))
+                {
+                    filePath = mp3Target;
+                    aType = AudioType.MPEG;
+                }
+                else
+                {
+                    aType = AudioType.ACC;
+                }
             }
 
             string uri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
