@@ -22,6 +22,10 @@ namespace WorkableBoombox.UI
         private bool isAddingPlaylist = false;
         private string newPlaylistInput = "";
 
+        private bool isImportingPlaylist = false;
+        private string importPlaylistNameInput = "Imported Playlist";
+        private string importTextInput = "";
+
         private bool isAddingTrack = false;
         private string newTrackTitleInput = "";
         private string newTrackUrlInput = "";
@@ -94,6 +98,8 @@ namespace WorkableBoombox.UI
 
             isAddingPlaylist = false;
             newPlaylistInput = "";
+            isImportingPlaylist = false;
+            importTextInput = "";
             isAddingTrack = false;
             newTrackTitleInput = "";
             newTrackUrlInput = "";
@@ -125,6 +131,8 @@ namespace WorkableBoombox.UI
             TargetBoombox = null;
 
             isAddingPlaylist = false;
+            isImportingPlaylist = false;
+            importTextInput = "";
             isAddingTrack = false;
 
             if (InputManager.instance != null)
@@ -390,7 +398,7 @@ namespace WorkableBoombox.UI
             Rect view2Rect = new Rect(x2, contentY + 28f, col2Width, contentHeight - 28f);
 
             int plTotal = currentPlayerPlaylists != null ? currentPlayerPlaylists.Count : 0;
-            float inner2Height = Mathf.Max(view2Rect.height, (plTotal + 1) * 32f + (isAddingPlaylist ? 48f : 0f));
+            float inner2Height = Mathf.Max(view2Rect.height, (plTotal + 1) * 32f + (isAddingPlaylist ? 70f : (isImportingPlaylist ? 174f : 34f)));
             Rect scroll2Rect = new Rect(0, 0, col2Width - 18f, inner2Height);
 
             scrollPlaylists = GUI.BeginScrollView(view2Rect, scrollPlaylists, scroll2Rect);
@@ -405,16 +413,28 @@ namespace WorkableBoombox.UI
                     bool isSelected = string.Equals(selectedPlaylistName, plName, StringComparison.OrdinalIgnoreCase);
 
                     string label = $"{plName} [{trackCount}]";
-                    float btnWidth = isLocalPlayerSelected ? (col2Width - 52f) : (col2Width - 20f);
-
-                    if (GUI.Button(new Rect(0, itemY, btnWidth, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
-                    {
-                        selectedPlaylistName = plName;
-                        selectedTrackIndex = 0;
-                    }
 
                     if (isLocalPlayerSelected)
                     {
+                        float labelW = col2Width - 78f;
+                        if (GUI.Button(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                        {
+                            selectedPlaylistName = plName;
+                            selectedTrackIndex = 0;
+                        }
+
+                        // Кнопка экспорта плейлиста в буфер обмена
+                        if (GUI.Button(new Rect(col2Width - 74f, itemY, 24f, 28f), "📋", secondaryButtonStyle))
+                        {
+                            string json = PlaylistManager.Instance.ExportPlaylistJson(plName);
+                            if (!string.IsNullOrEmpty(json))
+                            {
+                                GUIUtility.systemCopyBuffer = json;
+                                BoomboxHUD.Instance?.ShowTrackNotification($"📋 Copied '{plName}' JSON to clipboard!");
+                            }
+                        }
+
+                        // Кнопка удаления
                         if (GUI.Button(new Rect(col2Width - 48f, itemY, 26f, 28f), "✕", deleteButtonStyle))
                         {
                             PlaylistManager.Instance.RemovePlaylist(plName);
@@ -425,24 +445,51 @@ namespace WorkableBoombox.UI
                             break;
                         }
                     }
+                    else
+                    {
+                        float labelW = col2Width - 52f;
+                        if (GUI.Button(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                        {
+                            selectedPlaylistName = plName;
+                            selectedTrackIndex = 0;
+                        }
+
+                        // Кнопка импорта чужого плейлиста в локальные
+                        if (GUI.Button(new Rect(col2Width - 48f, itemY, 26f, 28f), "📥", secondaryButtonStyle))
+                        {
+                            if (PlaylistManager.Instance.ImportPlaylistFromPlayer(selectedPlayerNick, plName, out string finalName))
+                            {
+                                BoomboxHUD.Instance?.ShowTrackNotification($"📥 Imported '{finalName}' from {selectedPlayerNick}!");
+                            }
+                        }
+                    }
 
                     itemY += 30f;
                 }
             }
 
-            // Кнопка добавления плейлиста [+]
+            // Кнопки добавления и импорта плейлиста
             if (isLocalPlayerSelected)
             {
-                if (!isAddingPlaylist)
+                if (!isAddingPlaylist && !isImportingPlaylist)
                 {
-                    if (GUI.Button(new Rect(0, itemY, col2Width - 20f, 28f), "+", secondaryButtonStyle))
+                    float halfBtnW = (col2Width - 24f) * 0.5f;
+                    if (GUI.Button(new Rect(0, itemY, halfBtnW, 28f), "+ New", secondaryButtonStyle))
                     {
                         isAddingPlaylist = true;
+                        isImportingPlaylist = false;
                         newPlaylistInput = "";
+                    }
+                    if (GUI.Button(new Rect(halfBtnW + 4f, itemY, halfBtnW, 28f), "📥 Import", secondaryButtonStyle))
+                    {
+                        isImportingPlaylist = true;
+                        isAddingPlaylist = false;
+                        importPlaylistNameInput = "Imported Playlist";
+                        importTextInput = "";
                     }
                     itemY += 32f;
                 }
-                else
+                else if (isAddingPlaylist)
                 {
                     GUI.Box(new Rect(0, itemY, col2Width - 20f, 64f), GUIContent.none, windowStyle);
                     GUI.Label(new Rect(4f, itemY + 2f, col2Width - 28f, 16f), "Playlist Name:", itemLabelStyle);
@@ -465,6 +512,41 @@ namespace WorkableBoombox.UI
                         newPlaylistInput = "";
                     }
                     itemY += 68f;
+                }
+                else if (isImportingPlaylist)
+                {
+                    GUI.Box(new Rect(0, itemY, col2Width - 20f, 164f), GUIContent.none, windowStyle);
+                    GUI.Label(new Rect(4f, itemY + 2f, col2Width - 28f, 16f), "Target Playlist:", itemLabelStyle);
+                    importPlaylistNameInput = GUI.TextField(new Rect(4f, itemY + 18f, col2Width - 28f, 20f), importPlaylistNameInput, inputFieldStyle);
+
+                    GUI.Label(new Rect(4f, itemY + 40f, col2Width - 28f, 16f), "Paste JSON or Text / URLs:", itemLabelStyle);
+                    importTextInput = GUI.TextArea(new Rect(4f, itemY + 56f, col2Width - 28f, 48f), importTextInput, inputFieldStyle);
+
+                    if (GUI.Button(new Rect(4f, itemY + 108f, col2Width - 28f, 22f), "📋 Paste from Clipboard", secondaryButtonStyle))
+                    {
+                        if (!string.IsNullOrEmpty(GUIUtility.systemCopyBuffer))
+                        {
+                            importTextInput = GUIUtility.systemCopyBuffer;
+                        }
+                    }
+
+                    float halfW = (col2Width - 32f) * 0.5f;
+                    if (GUI.Button(new Rect(4f, itemY + 134f, halfW, 22f), "✓ Import", actionButtonStyle))
+                    {
+                        if (PlaylistManager.Instance.ImportPlaylistFromText(importTextInput, importPlaylistNameInput, out string finalPl, out int count))
+                        {
+                            selectedPlaylistName = finalPl;
+                            isImportingPlaylist = false;
+                            importTextInput = "";
+                            BoomboxHUD.Instance?.ShowTrackNotification($"📥 Imported {count} tracks into '{finalPl}'!");
+                        }
+                    }
+                    if (GUI.Button(new Rect(4f + halfW + 4f, itemY + 134f, halfW, 22f), "✕ Cancel", cancelButtonStyle))
+                    {
+                        isImportingPlaylist = false;
+                        importTextInput = "";
+                    }
+                    itemY += 170f;
                 }
             }
             GUI.EndScrollView();
@@ -493,7 +575,7 @@ namespace WorkableBoombox.UI
                     string prefix = tUrl.StartsWith("local:", StringComparison.OrdinalIgnoreCase) ? "📁 " : "▶ ";
                     string label = $"{idx + 1}. {prefix}{tName}";
 
-                    float btnWidth = isLocalPlayerSelected ? (col3Width - 52f) : (col3Width - 20f);
+                    float btnWidth = col3Width - 52f;
 
                     if (GUI.Button(new Rect(0, itemY, btnWidth, 26f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
                     {
@@ -508,6 +590,18 @@ namespace WorkableBoombox.UI
                         {
                             PlaylistManager.Instance.RemoveTrackFromPlaylist(selectedPlaylistName, tName);
                             break;
+                        }
+                    }
+                    else
+                    {
+                        // Кнопка импорта чужого трека в локальный плейлист
+                        if (GUI.Button(new Rect(col3Width - 48f, itemY, 26f, 26f), "📥", secondaryButtonStyle))
+                        {
+                            string targetPl = !string.IsNullOrEmpty(selectedPlaylistName) ? selectedPlaylistName : "Imported Tracks";
+                            if (PlaylistManager.Instance.ImportTrackFromPlayer(selectedPlayerNick, selectedPlaylistName, tName, targetPl))
+                            {
+                                BoomboxHUD.Instance?.ShowTrackNotification($"📥 Added '{tName}' to '{targetPl}'!");
+                            }
                         }
                     }
 
@@ -540,7 +634,18 @@ namespace WorkableBoombox.UI
                     newTrackTitleInput = GUI.TextField(new Rect(6f, itemY + 18f, col3Width - 32f, 20f), newTrackTitleInput, inputFieldStyle);
 
                     GUI.Label(new Rect(6f, itemY + 40f, col3Width - 32f, 16f), "URL (YouTube / local:track.mp3):", itemLabelStyle);
-                    newTrackUrlInput = GUI.TextField(new Rect(6f, itemY + 56f, col3Width - 32f, 20f), newTrackUrlInput, inputFieldStyle);
+                    newTrackUrlInput = GUI.TextField(new Rect(6f, itemY + 56f, col3Width - 106f, 20f), newTrackUrlInput, inputFieldStyle);
+                    if (GUI.Button(new Rect(col3Width - 96f, itemY + 56f, 70f, 20f), "📋 Paste", secondaryButtonStyle))
+                    {
+                        if (!string.IsNullOrEmpty(GUIUtility.systemCopyBuffer))
+                        {
+                            newTrackUrlInput = GUIUtility.systemCopyBuffer.Trim();
+                            if (string.IsNullOrWhiteSpace(newTrackTitleInput))
+                            {
+                                newTrackTitleInput = System.IO.Path.GetFileNameWithoutExtension(newTrackUrlInput);
+                            }
+                        }
+                    }
 
                     float halfTrackW = (col3Width - 44f) * 0.5f;
                     if (GUI.Button(new Rect(6f, itemY + 82f, halfTrackW, 24f), "✓ Add", actionButtonStyle))

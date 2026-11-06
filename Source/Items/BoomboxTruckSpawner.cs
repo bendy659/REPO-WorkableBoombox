@@ -140,7 +140,7 @@ namespace WorkableBoombox.Items
             if (sp != null)
             {
                 rotation = sp.transform.rotation;
-                return sp.transform.position + Vector3.up * 0.25f + sp.transform.right * 0.6f;
+                return sp.transform.position + Vector3.up * 0.25f;
             }
 
             // 2. Дверь грузовика

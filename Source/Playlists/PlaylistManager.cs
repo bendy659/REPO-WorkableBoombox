@@ -324,5 +324,227 @@ namespace WorkableBoombox.Playlists
 
             return false;
         }
+
+        public bool ImportPlaylistFromPlayer(string ownerNick, string playlistName, out string finalPlaylistName)
+        {
+            finalPlaylistName = null;
+            if (string.IsNullOrWhiteSpace(ownerNick) || string.IsNullOrWhiteSpace(playlistName))
+            {
+                return false;
+            }
+
+            var all = GetAllRoomPlaylists();
+            if (!all.TryGetValue(ownerNick, out var playerPlaylists) || !playerPlaylists.TryGetValue(playlistName, out var sourceTracks))
+            {
+                return false;
+            }
+
+            // Выбираем имя, чтобы не перезаписать существующий локальный плейлист
+            string targetName = playlistName.Trim();
+            if (LocalPlaylists.ContainsKey(targetName))
+            {
+                targetName = $"{playlistName.Trim()} ({ownerNick})";
+            }
+
+            int suffix = 1;
+            while (LocalPlaylists.ContainsKey(targetName))
+            {
+                targetName = $"{playlistName.Trim()} ({ownerNick} {suffix++})";
+            }
+
+            var newTracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in sourceTracks)
+            {
+                newTracks[kvp.Key] = kvp.Value;
+            }
+
+            LocalPlaylists[targetName] = newTracks;
+            SaveLocalPlaylists();
+            finalPlaylistName = targetName;
+            Plugin.Log.LogInfo($"[PlaylistManager] Imported playlist '{playlistName}' from {ownerNick} as '{targetName}' ({newTracks.Count} tracks).");
+            return true;
+        }
+
+        public bool ImportTrackFromPlayer(string ownerNick, string sourcePlaylistName, string trackTitle, string targetLocalPlaylistName)
+        {
+            if (string.IsNullOrWhiteSpace(ownerNick) || string.IsNullOrWhiteSpace(sourcePlaylistName) || string.IsNullOrWhiteSpace(trackTitle))
+            {
+                return false;
+            }
+
+            var all = GetAllRoomPlaylists();
+            if (!all.TryGetValue(ownerNick, out var playerPlaylists) || !playerPlaylists.TryGetValue(sourcePlaylistName, out var sourceTracks))
+            {
+                return false;
+            }
+
+            if (!sourceTracks.TryGetValue(trackTitle, out string trackUrl))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(targetLocalPlaylistName))
+            {
+                targetLocalPlaylistName = "Imported Tracks";
+            }
+
+            targetLocalPlaylistName = targetLocalPlaylistName.Trim();
+            if (!LocalPlaylists.TryGetValue(targetLocalPlaylistName, out var targetTracks))
+            {
+                targetTracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                LocalPlaylists[targetLocalPlaylistName] = targetTracks;
+            }
+
+            targetTracks[trackTitle.Trim()] = trackUrl.Trim();
+            SaveLocalPlaylists();
+            Plugin.Log.LogInfo($"[PlaylistManager] Imported track '{trackTitle}' from {ownerNick} into '{targetLocalPlaylistName}'.");
+            return true;
+        }
+
+        public bool ImportPlaylistFromText(string rawText, string targetPlaylistName, out string finalPlaylistName, out int importedCount)
+        {
+            finalPlaylistName = targetPlaylistName;
+            importedCount = 0;
+
+            if (string.IsNullOrWhiteSpace(rawText))
+            {
+                return false;
+            }
+
+            rawText = rawText.Trim();
+
+            // 1. Попытка распарсить как словарь плейлистов JSON
+            try
+            {
+                var multiPlaylists = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, string>>>(rawText);
+                if (multiPlaylists != null && multiPlaylists.Count > 0)
+                {
+                    foreach (var pl in multiPlaylists)
+                    {
+                        if (!string.IsNullOrWhiteSpace(pl.Key) && pl.Value != null)
+                        {
+                            string plName = pl.Key.Trim();
+                            if (!LocalPlaylists.TryGetValue(plName, out var tracks))
+                            {
+                                tracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                                LocalPlaylists[plName] = tracks;
+                            }
+                            foreach (var tr in pl.Value)
+                            {
+                                tracks[tr.Key] = tr.Value;
+                                importedCount++;
+                            }
+                            finalPlaylistName = plName;
+                        }
+                    }
+                    if (importedCount > 0)
+                    {
+                        SaveLocalPlaylists();
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Попытка распарсить как одиночный JSON плейлист (Title -> URL)
+            try
+            {
+                var singlePlaylist = JsonConvert.DeserializeObject<Dictionary<string, string>>(rawText);
+                if (singlePlaylist != null && singlePlaylist.Count > 0)
+                {
+                    string plName = !string.IsNullOrWhiteSpace(targetPlaylistName) ? targetPlaylistName.Trim() : "Imported Playlist";
+                    if (!LocalPlaylists.TryGetValue(plName, out var tracks))
+                    {
+                        tracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        LocalPlaylists[plName] = tracks;
+                    }
+                    foreach (var tr in singlePlaylist)
+                    {
+                        tracks[tr.Key] = tr.Value;
+                        importedCount++;
+                    }
+                    finalPlaylistName = plName;
+                    SaveLocalPlaylists();
+                    return true;
+                }
+            }
+            catch { }
+
+            // 3. Построчный парсинг простого текста: "Title - URL" или "Title = URL" или чистый URL
+            string destPlaylist = !string.IsNullOrWhiteSpace(targetPlaylistName) ? targetPlaylistName.Trim() : "Imported Playlist";
+            if (!LocalPlaylists.TryGetValue(destPlaylist, out var destTracks))
+            {
+                destTracks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                LocalPlaylists[destPlaylist] = destTracks;
+            }
+
+            string[] lines = rawText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                string trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#") || trimmed.StartsWith("//"))
+                {
+                    continue;
+                }
+
+                string title = null;
+                string url = null;
+
+                if (trimmed.Contains(" - "))
+                {
+                    int lastSep = trimmed.LastIndexOf(" - ", StringComparison.Ordinal);
+                    title = trimmed.Substring(0, lastSep).Trim();
+                    url = trimmed.Substring(lastSep + 3).Trim();
+                }
+                else if (trimmed.Contains(" = "))
+                {
+                    int sep = trimmed.IndexOf(" = ", StringComparison.Ordinal);
+                    title = trimmed.Substring(0, sep).Trim();
+                    url = trimmed.Substring(sep + 3).Trim();
+                }
+                else if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                         trimmed.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = trimmed;
+                    title = Path.GetFileNameWithoutExtension(url);
+                    if (string.IsNullOrEmpty(title) || title.Length < 3)
+                    {
+                        title = $"Track {destTracks.Count + 1}";
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(url))
+                {
+                    destTracks[title] = url;
+                    importedCount++;
+                }
+            }
+
+            if (importedCount > 0)
+            {
+                finalPlaylistName = destPlaylist;
+                SaveLocalPlaylists();
+                return true;
+            }
+
+            return false;
+        }
+
+        public string ExportPlaylistJson(string playlistName)
+        {
+            if (string.IsNullOrWhiteSpace(playlistName)) return null;
+
+            if (LocalPlaylists.TryGetValue(playlistName.Trim(), out var tracks))
+            {
+                var dict = new Dictionary<string, Dictionary<string, string>>
+                {
+                    { playlistName.Trim(), tracks }
+                };
+                return JsonConvert.SerializeObject(dict, Formatting.Indented);
+            }
+
+            return null;
+        }
     }
 }
