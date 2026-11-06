@@ -52,11 +52,12 @@ Place your music files into:
 `BepInEx/plugins/WorkableBoombox/Tracks/`
 
 #### Method 2: Automatic GitHub Sync
-Synchronize tracks with your group via a private or public GitHub repo. In `BepInEx/config/com.bendy659.workableboombox.cfg`:
+Synchronize tracks with your group via a public GitHub repo. In `BepInEx/config/com.bendy659.workableboombox.cfg`:
 ```ini
 [GitHub]
-GitHubSource = username/repo-name/github_pat_11AB...
+GitHubSource = username/repo-name
 ```
+*(Personal Access Token is no longer required! Simply provide the public repository name or URL).*
 The mod checks Git tree commit SHAs at game launch, downloads new tracks directly from the root of the repository, and removes deleted ones automatically.
 
 ---

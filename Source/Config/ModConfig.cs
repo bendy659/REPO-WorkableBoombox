@@ -79,8 +79,8 @@ namespace WorkableBoombox.Config
             AlwaysSpawnInTruck = config.Bind("Spawn", "AlwaysSpawnInTruck", true, "Всегда автоматически спавнить бумбокс в грузовике (для тестов и удобства) / Always spawn boombox in truck");
 
             // GitHub Sync
-            GitHubSyncEnabled = config.Bind("GitHub", "GitHubSyncEnabled", true, "Автоматически синхронизировать треки с GitHub при запуске игры");
-            GitHubSource = config.Bind("GitHub", "GitHubSource", "", "Inline-ссылка в формате: owner/repo/token (например: bendy659/repo-workableboombox-tracks/github_pat_...). Треки качаются напрямую из корня репо без подпапок.");
+            GitHubSyncEnabled = config.Bind("GitHub", "GitHubSyncEnabled", true, "Автоматически синхронизировать треки с GitHub при запуске игры / Automatically sync tracks with GitHub");
+            GitHubSource = config.Bind("GitHub", "GitHubSource", "", "Ссылка на публичный репозиторий GitHub с треками: owner/repo или https://github.com/owner/repo (например: bendy659/repo-workableboombox-tracks). Токен доступа больше не требуется! / GitHub tracks repository: owner/repo");
         }
 
         public static bool TryParseGitHubSource(string input, out string owner, out string repo, out string token)

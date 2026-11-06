@@ -71,7 +71,7 @@ namespace WorkableBoombox.Audio
             bool canSync = ModConfig.GitHubSyncEnabled.Value && hasValidSource;
             if (!canSync)
             {
-                Plugin.Log.LogInfo("[GitHubSync] Синхронизация отключена или GitHubSource не настроен (формат: owner/repo/token).");
+                Plugin.Log.LogInfo("[GitHubSync] Синхронизация отключена или GitHubSource не настроен (формат: owner/repo).");
                 return;
             }
 
@@ -91,7 +91,7 @@ namespace WorkableBoombox.Audio
             bool parsed = ModConfig.TryParseGitHubSource(ModConfig.GitHubSource.Value, out string owner, out string repo, out string token);
             if (!parsed)
             {
-                Plugin.Log.LogWarning("[GitHubSync] Не удалось распарсить GitHubSource. Ожидается: owner/repo/token");
+                Plugin.Log.LogWarning("[GitHubSync] Не удалось распарсить GitHubSource. Ожидается: owner/repo (например: bendy659/repo-workableboombox-tracks)");
                 IsSyncing = false;
                 yield break;
             }
