@@ -215,7 +215,8 @@ namespace WorkableBoombox.Items
                 GameObject customPrefab = UnityEngine.Object.Instantiate(original);
                 customPrefab.name = "WorkableBoomboxItem";
                 UnityEngine.Object.DontDestroyOnLoad(customPrefab);
-                customPrefab.SetActive(false);
+                customPrefab.transform.position = new Vector3(0f, -9999f, 0f);
+                customPrefab.SetActive(true);
 
                 // Сохраняем ссылки на динамики и свет
                 ValuableBoombox oldBoombox = customPrefab.GetComponent<ValuableBoombox>();
@@ -317,6 +318,21 @@ namespace WorkableBoombox.Items
 
                 RegisteredPrefab = customPrefab;
                 IsRegistered = true;
+
+                // Регистрируем в NetworkPrefabs под всеми возможными идентификаторами для Photon / RepoAdminMenu / REPOLib
+                REPOLib.Modules.NetworkPrefabs.RegisterNetworkPrefab("WorkableBoomboxItem", customPrefab);
+                REPOLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(itemSO.name, customPrefab);
+                if (registeredRef != null)
+                {
+                    if (!string.IsNullOrEmpty(registeredRef.PrefabName))
+                    {
+                        REPOLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(registeredRef.PrefabName, customPrefab);
+                    }
+                    if (!string.IsNullOrEmpty(registeredRef.ResourcePath))
+                    {
+                        REPOLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(registeredRef.ResourcePath, customPrefab);
+                    }
+                }
                 Plugin.Log.LogInfo($"[BoomboxItemBuilder] Кастомный предмет '{itemSO.itemName}' успешно зарегистрирован! (PrefabRef: {(registeredRef != null ? registeredRef.PrefabName : "ok")})");
                 return true;
             }

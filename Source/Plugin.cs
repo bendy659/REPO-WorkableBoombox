@@ -19,7 +19,7 @@ namespace WorkableBoombox
     {
         public const string ModGUID = "com.bendy659.workableboombox";
         public const string ModName = "Workable Boombox";
-        public const string ModVersion = "1.1.0";
+        public const string ModVersion = "1.1.1";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
@@ -44,6 +44,27 @@ namespace WorkableBoombox
             {
                 HarmonyInstance = new Harmony(ModGUID);
                 HarmonyInstance.PatchAll();
+
+                // Патч для RepoAdminMenu если он установлен
+                try
+                {
+                    Type itemUtilType = AccessTools.TypeByName("RepoAdminMenu.Utils.ItemUtil");
+                    if (itemUtilType != null)
+                    {
+                        var spawnMethod = AccessTools.Method(itemUtilType, "spawnItem");
+                        var postfixMethod = AccessTools.Method(typeof(WorkableBoombox.Patches.SpawnPatches), nameof(WorkableBoombox.Patches.SpawnPatches.RepoAdminMenu_SpawnItem_Postfix));
+                        if (spawnMethod != null && postfixMethod != null)
+                        {
+                            HarmonyInstance.Patch(spawnMethod, postfix: new HarmonyMethod(postfixMethod));
+                            Log.LogInfo("[Harmony] Патч для RepoAdminMenu.ItemUtil.spawnItem успешно применен.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.LogWarning($"[Harmony] Не удалось пропатчить RepoAdminMenu: {ex.Message}");
+                }
+
                 Log.LogInfo("[Harmony] Патчи успешно применены.");
             }
             catch (Exception ex)
@@ -62,6 +83,7 @@ namespace WorkableBoombox
             systemsHost.AddComponent<BoomboxPlaylistUI>();
             systemsHost.AddComponent<BoomboxHUD>();
             systemsHost.AddComponent<BoomboxInteraction>();
+            systemsHost.AddComponent<BoomboxTruckSpawner>();
 
             // 4. Запуск фоновой синхронизации с GitHub (если настроено)
             if (ModConfig.GitHubSyncEnabled.Value)

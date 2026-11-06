@@ -37,6 +37,7 @@ namespace WorkableBoombox.Config
         // Shop / Item Settings
         public static ConfigEntry<int> ShopPrice;
         public static ConfigEntry<string> CustomItemName;
+        public static ConfigEntry<bool> AlwaysSpawnInTruck;
 
         // GitHub Sync Settings
         public static ConfigEntry<bool> GitHubSyncEnabled;
@@ -75,6 +76,7 @@ namespace WorkableBoombox.Config
             // Shop / Item
             ShopPrice = config.Bind("Shop", "ShopPrice", 45, "Цена покупки бумбокса в магазине");
             CustomItemName = config.Bind("Shop", "CustomItemName", "Workable Boombox", "Название предмета в игре");
+            AlwaysSpawnInTruck = config.Bind("Spawn", "AlwaysSpawnInTruck", true, "Всегда автоматически спавнить бумбокс в грузовике (для тестов и удобства) / Always spawn boombox in truck");
 
             // GitHub Sync
             GitHubSyncEnabled = config.Bind("GitHub", "GitHubSyncEnabled", true, "Автоматически синхронизировать треки с GitHub при запуске игры");

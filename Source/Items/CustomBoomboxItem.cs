@@ -87,6 +87,30 @@ namespace WorkableBoombox.Items
 
         private void Awake()
         {
+            if (BoomboxItemBuilder.RegisteredPrefab != null && gameObject == BoomboxItemBuilder.RegisteredPrefab)
+            {
+                if (AudioSource != null) AudioSource.enabled = false;
+                Rigidbody masterRb = GetComponent<Rigidbody>();
+                if (masterRb != null) { masterRb.isKinematic = true; masterRb.detectCollisions = false; }
+                Collider[] masterCols = GetComponentsInChildren<Collider>(true);
+                foreach (var c in masterCols) c.enabled = false;
+                enabled = false;
+                return;
+            }
+
+            // На реальных экземплярах бумбокса гарантируем активные коллизии и физику
+            Rigidbody rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.isKinematic = false;
+                rb.detectCollisions = true;
+            }
+            Collider[] cols = GetComponentsInChildren<Collider>(true);
+            foreach (var c in cols)
+            {
+                c.enabled = true;
+            }
+
             initialBodyScale = transform.localScale;
 
             CurrentLoopMode = (LoopMode)Mathf.Clamp(ModConfig.DefaultLoopMode.Value, 0, 2);
@@ -258,6 +282,11 @@ namespace WorkableBoombox.Items
 
         private void OnEnable()
         {
+            if (BoomboxItemBuilder.RegisteredPrefab != null && gameObject == BoomboxItemBuilder.RegisteredPrefab)
+            {
+                return;
+            }
+
             if (!ActiveBoomboxes.Contains(this))
             {
                 ActiveBoomboxes.Add(this);
