@@ -139,7 +139,7 @@ namespace WorkableBoombox.Items
             TruckSafetySpawnPoint sp = TruckSafetySpawnPoint.instance ?? UnityEngine.Object.FindObjectOfType<TruckSafetySpawnPoint>();
             if (sp != null)
             {
-                rotation = sp.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                rotation = sp.transform.rotation;
                 return sp.transform.position + Vector3.up * 0.25f;
             }
 
@@ -147,7 +147,7 @@ namespace WorkableBoombox.Items
             TruckDoor door = UnityEngine.Object.FindObjectOfType<TruckDoor>();
             if (door != null)
             {
-                rotation = door.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                rotation = door.transform.rotation;
                 return door.transform.position + door.transform.forward * 1.5f + Vector3.up * 0.25f;
             }
 
@@ -157,12 +157,12 @@ namespace WorkableBoombox.Items
             {
                 if (ext.platform != null)
                 {
-                    rotation = ext.platform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                    rotation = ext.platform.rotation;
                     return ext.platform.position + ext.platform.up * 0.45f + ext.platform.right * 0.85f;
                 }
                 if (ext.safetySpawn != null)
                 {
-                    rotation = ext.safetySpawn.rotation * Quaternion.Euler(0f, 180f, 0f);
+                    rotation = ext.safetySpawn.rotation;
                     return ext.safetySpawn.position + Vector3.up * 0.25f + ext.safetySpawn.right * 0.6f;
                 }
             }

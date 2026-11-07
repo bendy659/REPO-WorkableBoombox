@@ -240,8 +240,9 @@ namespace WorkableBoombox.Interaction
             }
 
             // 5. Перемотка: зажат [F] + колесико мыши
-            if (isHoldingNextTrackKey)
+            if (isHoldingNextTrackKey || Input.GetKey(nextKey))
             {
+                isHoldingNextTrackKey = true;
                 float scrollDelta = Input.mouseScrollDelta.y;
                 if (Mathf.Abs(scrollDelta) > 0.01f)
                 {

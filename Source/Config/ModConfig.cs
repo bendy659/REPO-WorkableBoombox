@@ -64,7 +64,7 @@ namespace WorkableBoombox.Config
             EnableCameraShake = config.Bind("Visuals", "EnableCameraShake", true, "Enable camera shake when standing close to loud music");
             EnableVisualPulsing = config.Bind("Visuals", "EnableVisualPulsing", true, "Enable boombox speakers and body pulsing to the music beat");
             EnableLightMusic = config.Bind("Visuals", "EnableLightMusic", true, "Enable boombox disco lighting and speaker glow / Свето-музыка");
-            LightMusicBrightness = config.Bind("Visuals", "LightMusicBrightness", 0.4f, "Brightness multiplier for disco lights and speaker glow (0.0 to 2.0, default: 0.4) / Яркость свето-музыки");
+            LightMusicBrightness = config.Bind("Visuals", "LightMusicBrightness", 1.0f, "Brightness multiplier for disco lights and speaker glow (0.0 to 2.0, default: 1.0) / Яркость свето-музыки");
 
             // UI & Overlay
             OverlayPositionX = config.Bind("UI", "OverlayPositionX", 0.5f, "Horizontal position of HUD overlay: 0.0 (left) ... 0.5 (center) ... 1.0 (right)");

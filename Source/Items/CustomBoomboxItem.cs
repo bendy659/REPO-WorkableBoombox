@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Photon.Pun;
 using UnityEngine;
@@ -435,6 +436,41 @@ namespace WorkableBoombox.Items
             bool nextState = !IsPlaying;
             if (nextState)
             {
+                // Если бумбокс еще не в режиме плейлиста, сначала ищем доступные плейлисты у игрока / комнаты
+                if (!IsPlaylistMode && PlaylistManager.Instance != null)
+                {
+                    var allPlaylists = PlaylistManager.Instance.GetAllRoomPlaylists();
+                    string chosenOwner = null;
+                    string chosenPlaylist = null;
+                    List<PlaylistTrackEntry> chosenTracks = null;
+
+                    string localNick = !string.IsNullOrEmpty(PhotonNetwork.NickName) ? PhotonNetwork.NickName : "Me";
+                    if (allPlaylists.TryGetValue(localNick, out var myPlaylists) && myPlaylists.Count > 0)
+                    {
+                        var kv = myPlaylists.First();
+                        chosenOwner = localNick;
+                        chosenPlaylist = kv.Key;
+                        chosenTracks = PlaylistManager.Instance.GetTrackList(localNick, kv.Key);
+                    }
+                    else if (allPlaylists.Count > 0)
+                    {
+                        var firstOwnerEntry = allPlaylists.First();
+                        if (firstOwnerEntry.Value.Count > 0)
+                        {
+                            var plEntry = firstOwnerEntry.Value.First();
+                            chosenOwner = firstOwnerEntry.Key;
+                            chosenPlaylist = plEntry.Key;
+                            chosenTracks = PlaylistManager.Instance.GetTrackList(chosenOwner, chosenPlaylist);
+                        }
+                    }
+
+                    if (chosenTracks != null && chosenTracks.Count > 0)
+                    {
+                        PlayPlaylist(chosenOwner, chosenPlaylist, 0);
+                        return;
+                    }
+                }
+
                 int trackCount = IsPlaylistMode
                     ? ActivePlaylistTracks.Count
                     : (BoomboxAudioManager.Instance != null ? BoomboxAudioManager.Instance.LoadedTracks.Count : 0);
@@ -1572,11 +1608,11 @@ namespace WorkableBoombox.Items
                 return;
             }
 
-            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0f, 2f) : 0.4f;
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0.1f, 5f) : 1.0f;
             float hue = Mathf.PingPong(Time.time * 0.5f, 1f);
             Color glowColor = Color.HSVToRGB(hue, 1f, 1f);
 
-            float emissionMult = (0.5f + smoothedRMS * 1.5f) * brightness;
+            float emissionMult = (1.0f + smoothedRMS * 2.5f) * brightness;
             if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null)
             {
                 SpeakerRenderer1.material.EnableKeyword("_EMISSION");
@@ -1589,14 +1625,11 @@ namespace WorkableBoombox.Items
                 SpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
 
-            float lightIntensity = (1.5f + smoothedRMS * 6.0f) * brightness;
+            // Восстанавливаем оригинальную яркость световых спотов бумбокса
+            float lightIntensity = (3.5f + smoothedRMS * 10.0f) * brightness;
 
             if (Light1 != null)
             {
-                Light1.type = LightType.Point;
-                Light1.range = 6.0f;
-                Light1.shadows = LightShadows.None;
-                Light1.renderMode = LightRenderMode.ForcePixel;
                 Light1.enabled = true;
                 Light1.color = glowColor;
                 Light1.intensity = lightIntensity;
@@ -1604,10 +1637,6 @@ namespace WorkableBoombox.Items
 
             if (Light2 != null)
             {
-                Light2.type = LightType.Point;
-                Light2.range = 6.0f;
-                Light2.shadows = LightShadows.None;
-                Light2.renderMode = LightRenderMode.ForcePixel;
                 Light2.enabled = true;
                 Light2.color = glowColor;
                 Light2.intensity = lightIntensity;
@@ -1792,7 +1821,7 @@ namespace WorkableBoombox.Items
             // Небольшой левитирующий боб-эффект
             float bob = Mathf.Sin(Time.time * 2.5f) * 0.03f;
             Vector3 targetPos = anchor.position - anchor.forward * 0.32f + anchor.up * (0.16f + bob) + anchor.right * 0.22f;
-            Quaternion targetRot = anchor.rotation * Quaternion.Euler(0f, 180f, 0f);
+            Quaternion targetRot = anchor.rotation;
 
             pocketVisual.transform.position = Vector3.Lerp(pocketVisual.transform.position, targetPos, Time.deltaTime * 20f);
             pocketVisual.transform.rotation = Quaternion.Slerp(pocketVisual.transform.rotation, targetRot, Time.deltaTime * 20f);
@@ -1899,15 +1928,11 @@ namespace WorkableBoombox.Items
 
             float hue = Mathf.PingPong(Time.time * 0.5f, 1f);
             Color glowColor = Color.HSVToRGB(hue, 1f, 1f);
-            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0f, 2f) : 0.4f;
-            float pocketIntensity = (1.2f + smoothedRMS * 4.0f) * brightness;
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0.1f, 5f) : 1.0f;
+            float pocketIntensity = (2.5f + smoothedRMS * 8.0f) * brightness;
 
             if (pocketLight1 != null)
             {
-                pocketLight1.type = LightType.Point;
-                pocketLight1.range = 5.0f;
-                pocketLight1.shadows = LightShadows.None;
-                pocketLight1.renderMode = LightRenderMode.ForcePixel;
                 pocketLight1.enabled = true;
                 pocketLight1.color = glowColor;
                 pocketLight1.intensity = pocketIntensity;
@@ -1915,16 +1940,12 @@ namespace WorkableBoombox.Items
 
             if (pocketLight2 != null)
             {
-                pocketLight2.type = LightType.Point;
-                pocketLight2.range = 5.0f;
-                pocketLight2.shadows = LightShadows.None;
-                pocketLight2.renderMode = LightRenderMode.ForcePixel;
                 pocketLight2.enabled = true;
                 pocketLight2.color = glowColor;
                 pocketLight2.intensity = pocketIntensity;
             }
 
-            float pocketEmission = (0.5f + smoothedRMS * 1.5f) * brightness;
+            float pocketEmission = (1.0f + smoothedRMS * 2.0f) * brightness;
             if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null)
             {
                 pocketSpeakerRenderer1.material.EnableKeyword("_EMISSION");

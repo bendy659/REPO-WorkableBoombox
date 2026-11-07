@@ -131,47 +131,7 @@ namespace WorkableBoombox.UI
         {
             InitStyles();
 
-            // 1. Уведомление о загрузке трека или переключении трека/режима (сверху экрана)
-            if (isDownloading || showTrackNotification)
-            {
-                string displayText = isDownloading ? downloadStatusText : trackNotificationText;
-                float trackWidth = 560f;
-                float trackHeight = 45f;
-                float trackX = (Screen.width - trackWidth) * 0.5f;
-                float trackY = 60f;
-
-                Rect trackRect = new Rect(trackX, trackY, trackWidth, trackHeight);
-                GUI.Box(trackRect, GUIContent.none, promptBoxStyle);
-                GUI.Label(trackRect, displayText, trackNotificationStyle);
-            }
-
-            // 2. Уведомление о громкости (по центру снизу)
-            if (showVolumeNotification)
-            {
-                float volWidth = 280f;
-                float volHeight = 45f;
-                float volX = (Screen.width - volWidth) * 0.5f;
-                float volY = Screen.height * 0.72f;
-
-                Rect volRect = new Rect(volX, volY, volWidth, volHeight);
-                GUI.Box(volRect, GUIContent.none, promptBoxStyle);
-                GUI.Label(volRect, volumeNotificationText, volumeFeedbackStyle);
-            }
-
-            // 3. Уведомление о перемотке (по центру экрана)
-            if (showScrubNotification)
-            {
-                float scrubWidth = 320f;
-                float scrubHeight = 50f;
-                float scrubX = (Screen.width - scrubWidth) * 0.5f;
-                float scrubY = Screen.height * 0.65f;
-
-                Rect scrubRect = new Rect(scrubX, scrubY, scrubWidth, scrubHeight);
-                GUI.Box(scrubRect, GUIContent.none, promptBoxStyle);
-                GUI.Label(scrubRect, scrubNotificationText, scrubStyle);
-            }
-
-            // 4. Подсказка взаимодействия
+            // 1. Подсказка взаимодействия (рисуется первой как базовый слой)
             if (showHoverPrompt)
             {
                 string title = string.IsNullOrEmpty(hoverBoomboxStatus)
@@ -215,6 +175,46 @@ namespace WorkableBoombox.UI
                 GUILayout.Label(BoomboxLocalization.PromptRow4(fKey, zKey), hotkeyStyle);
 
                 GUILayout.EndArea();
+            }
+
+            // 2. Уведомление о перемотке (по центру экрана, над подсказкой взаимодействия)
+            if (showScrubNotification)
+            {
+                float scrubWidth = 340f;
+                float scrubHeight = 52f;
+                float scrubX = (Screen.width - scrubWidth) * 0.5f;
+                float scrubY = Screen.height * 0.48f;
+
+                Rect scrubRect = new Rect(scrubX, scrubY, scrubWidth, scrubHeight);
+                GUI.Box(scrubRect, GUIContent.none, promptBoxStyle);
+                GUI.Label(scrubRect, scrubNotificationText, scrubStyle);
+            }
+
+            // 3. Уведомление о громкости (по центру снизу)
+            if (showVolumeNotification)
+            {
+                float volWidth = 280f;
+                float volHeight = 45f;
+                float volX = (Screen.width - volWidth) * 0.5f;
+                float volY = Screen.height * 0.76f;
+
+                Rect volRect = new Rect(volX, volY, volWidth, volHeight);
+                GUI.Box(volRect, GUIContent.none, promptBoxStyle);
+                GUI.Label(volRect, volumeNotificationText, volumeFeedbackStyle);
+            }
+
+            // 4. Уведомление о загрузке трека или переключении трека/режима (сверху экрана)
+            if (isDownloading || showTrackNotification)
+            {
+                string displayText = isDownloading ? downloadStatusText : trackNotificationText;
+                float trackWidth = 560f;
+                float trackHeight = 45f;
+                float trackX = (Screen.width - trackWidth) * 0.5f;
+                float trackY = 60f;
+
+                Rect trackRect = new Rect(trackX, trackY, trackWidth, trackHeight);
+                GUI.Box(trackRect, GUIContent.none, promptBoxStyle);
+                GUI.Label(trackRect, displayText, trackNotificationStyle);
             }
         }
 

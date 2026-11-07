@@ -224,22 +224,14 @@ namespace WorkableBoombox.Items
                 Light lt1 = oldBoombox != null ? oldBoombox.light1 : null;
                 Light lt2 = oldBoombox != null ? oldBoombox.light2 : null;
 
-                // Настраиваем световые источники как яркие точечные источники света для светомузыки
+                // Выключаем световые источники по умолчанию перед началом воспроизведения
                 if (lt1 != null)
                 {
-                    lt1.type = LightType.Point;
-                    lt1.range = 8.0f;
-                    lt1.shadows = LightShadows.None;
-                    lt1.renderMode = LightRenderMode.ForcePixel;
                     lt1.enabled = false;
                     lt1.intensity = 0f;
                 }
                 if (lt2 != null)
                 {
-                    lt2.type = LightType.Point;
-                    lt2.range = 8.0f;
-                    lt2.shadows = LightShadows.None;
-                    lt2.renderMode = LightRenderMode.ForcePixel;
                     lt2.enabled = false;
                     lt2.intensity = 0f;
                 }
