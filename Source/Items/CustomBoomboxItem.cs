@@ -1618,8 +1618,19 @@ namespace WorkableBoombox.Items
                 Transform[] transforms = GetComponentsInChildren<Transform>(true);
                 foreach (Transform t in transforms)
                 {
-                    if (t.name.IndexOf("speaker1", StringComparison.OrdinalIgnoreCase) >= 0 && Speaker1 == null) Speaker1 = t;
-                    else if (t.name.IndexOf("speaker2", StringComparison.OrdinalIgnoreCase) >= 0 && Speaker2 == null) Speaker2 = t;
+                    string lowerName = t.name.ToLowerInvariant();
+                    // В ванильном префабе динамики названы 'Boombbox speaker' и 'Boombbox speaker (1)'
+                    if (lowerName.Contains("speaker"))
+                    {
+                        if (Speaker1 == null)
+                        {
+                            Speaker1 = t;
+                        }
+                        else if (Speaker2 == null && t != Speaker1)
+                        {
+                            Speaker2 = t;
+                        }
+                    }
                 }
             }
 
@@ -1631,6 +1642,27 @@ namespace WorkableBoombox.Items
             {
                 SpeakerRenderer2 = Speaker2.GetComponent<Renderer>();
             }
+        }
+
+        public Vector3 GetFrontFacingDirection()
+        {
+            if (Speaker1 != null && Speaker2 != null)
+            {
+                Vector3 lateral = (Speaker2.position - Speaker1.position).normalized;
+                Vector3 fwd = Vector3.Cross(transform.up, lateral).normalized;
+
+                // Проверяем вектор от центра бумбокса к фронтальным динамикам
+                Vector3 speakerCenter = (Speaker1.position + Speaker2.position) * 0.5f;
+                Vector3 toSpeakers = speakerCenter - transform.position;
+                toSpeakers.y = 0f;
+                if (Vector3.Dot(fwd, toSpeakers) < 0f)
+                {
+                    fwd = -fwd;
+                }
+                return fwd;
+            }
+
+            return -transform.right;
         }
 
         private void AnimateVisuals()
@@ -1700,12 +1732,13 @@ namespace WorkableBoombox.Items
             float targetRange = ModConfig.SpotLightRange != null ? Mathf.Clamp(ModConfig.SpotLightRange.Value, 3f, 25f) : 10.0f;
             float innerAngle = Mathf.Max(20f, targetSpotAngle - 30f);
 
-            // Направление света строго вперед из обоих динамиков бумбокса с легким наклоном вниз к полу (-up * 0.18f)
-            Vector3 forwardDirection = (transform.forward - transform.up * 0.18f).normalized;
+            // Направление света строго вперед из лицевой панели динамиков с легким наклоном вниз (-up * 0.15f)
+            Vector3 frontFwd = GetFrontFacingDirection();
+            Vector3 forwardDirection = (frontFwd - transform.up * 0.15f).normalized;
             Quaternion forwardLightRot = Quaternion.LookRotation(forwardDirection, transform.up);
 
-            // Выносим лампы на 0.16m вперед от динамика в свободный воздух, чтобы расширение сабвуфера при басах никогда не заглатывало источник света
-            float forwardOffset = 0.16f;
+            // Выносим лампы на 0.15m вперед от динамика в свободный воздух
+            float forwardOffset = 0.15f;
 
             if (Light1 != null)
             {
@@ -1719,8 +1752,8 @@ namespace WorkableBoombox.Items
                 Light1.intensity = Mathf.Lerp(Light1.intensity, lightIntensity, Time.deltaTime * 10f);
 
                 Light1.transform.rotation = forwardLightRot;
-                Vector3 basePos = Speaker1 != null ? Speaker1.position : transform.position;
-                Light1.transform.position = basePos + transform.forward * forwardOffset;
+                Vector3 basePos = Speaker1 != null ? Speaker1.position : (transform.position + frontFwd * 0.2f);
+                Light1.transform.position = basePos + frontFwd * forwardOffset;
 
                 if (debugCone1 != null)
                 {
@@ -1740,8 +1773,8 @@ namespace WorkableBoombox.Items
                 Light2.intensity = Mathf.Lerp(Light2.intensity, lightIntensity, Time.deltaTime * 10f);
 
                 Light2.transform.rotation = forwardLightRot;
-                Vector3 basePos = Speaker2 != null ? Speaker2.position : transform.position;
-                Light2.transform.position = basePos + transform.forward * forwardOffset;
+                Vector3 basePos = Speaker2 != null ? Speaker2.position : (transform.position + frontFwd * 0.2f);
+                Light2.transform.position = basePos + frontFwd * forwardOffset;
 
                 if (debugCone2 != null)
                 {

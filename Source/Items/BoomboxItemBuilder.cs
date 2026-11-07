@@ -272,6 +272,7 @@ namespace WorkableBoombox.Items
                 PhotonView pv = customPrefab.GetComponent<PhotonView>();
                 if (pv != null && ptv != null)
                 {
+                    pv.Synchronization = ViewSynchronization.UnreliableOnChange;
                     if (pv.ObservedComponents == null)
                     {
                         pv.ObservedComponents = new List<Component>();

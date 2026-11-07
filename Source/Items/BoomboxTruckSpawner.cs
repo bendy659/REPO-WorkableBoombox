@@ -158,12 +158,13 @@ namespace WorkableBoombox.Items
                 if (ext.platform != null)
                 {
                     rotation = ext.platform.rotation * Quaternion.Euler(0f, 180f, 0f);
-                    return ext.platform.position + ext.platform.up * 0.45f + ext.platform.right * 0.85f;
+                    // Спавним прямо на поверхность платформы (0.08f над центроидом), исключая зависание в воздухе на клиентах
+                    return ext.platform.position + ext.platform.up * 0.08f + ext.platform.right * 0.85f;
                 }
                 if (ext.safetySpawn != null)
                 {
                     rotation = ext.safetySpawn.rotation * Quaternion.Euler(0f, 180f, 0f);
-                    return ext.safetySpawn.position + Vector3.up * 0.25f + ext.safetySpawn.right * 0.6f;
+                    return ext.safetySpawn.position + Vector3.up * 0.08f + ext.safetySpawn.right * 0.6f;
                 }
             }
 

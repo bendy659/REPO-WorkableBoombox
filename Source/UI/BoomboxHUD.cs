@@ -87,8 +87,17 @@ namespace WorkableBoombox.UI
             isDownloading = false;
         }
 
-        private static readonly System.Reflection.FieldInfo currentMenuStateField =
-            typeof(MenuManager).GetField("currentMenuState", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        private static readonly System.Reflection.FieldInfo levelAnimationCompletedField =
+            typeof(LoadingUI).GetField("levelAnimationCompleted", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        private static readonly System.Reflection.FieldInfo isDisabledField =
+            typeof(PlayerAvatar).GetField("isDisabled", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        private static readonly System.Reflection.FieldInfo deadSetField =
+            typeof(PlayerAvatar).GetField("deadSet", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        private static readonly System.Reflection.FieldInfo currentMenuPageField =
+            typeof(MenuManager).GetField("currentMenuPage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
         public bool ShouldHideHUD()
         {
@@ -97,22 +106,68 @@ namespace WorkableBoombox.UI
                 return true;
             }
 
-            if (GameDirector.instance != null && GameDirector.instance.currentState != GameDirector.gameState.Main)
+            // Скрываем, если GameDirector не создан или игра не в основном геймплейном состоянии
+            if (GameDirector.instance == null || GameDirector.instance.currentState != GameDirector.gameState.Main)
             {
                 return true;
             }
 
-            if (LoadingUI.instance != null && LoadingUI.instance.gameObject.activeInHierarchy)
+            // Скрываем во время экрана загрузки (ЗАГРУЗКА с машинкой)
+            if (LoadingUI.instance != null)
+            {
+                if (LoadingUI.instance.gameObject.activeInHierarchy)
+                {
+                    return true;
+                }
+                if (levelAnimationCompletedField != null)
+                {
+                    try
+                    {
+                        bool completed = (bool)levelAnimationCompletedField.GetValue(LoadingUI.instance);
+                        if (!completed) return true;
+                    }
+                    catch { }
+                }
+            }
+
+            // Скрываем, пока уровень еще генерируется
+            if (!SemiFunc.LevelGenDone())
             {
                 return true;
             }
 
-            if (MenuManager.instance != null && currentMenuStateField != null)
+            // Скрываем, если локальный персонаж не инициализирован, отключен или мертв
+            PlayerAvatar avatar = SemiFunc.PlayerAvatarLocal();
+            if (avatar == null)
+            {
+                return true;
+            }
+
+            if (isDisabledField != null)
             {
                 try
                 {
-                    int state = (int)currentMenuStateField.GetValue(MenuManager.instance);
-                    if (state == 0) // 0 = MenuState.Open
+                    if ((bool)isDisabledField.GetValue(avatar)) return true;
+                }
+                catch { }
+            }
+
+            if (deadSetField != null)
+            {
+                try
+                {
+                    if ((bool)deadSetField.GetValue(avatar)) return true;
+                }
+                catch { }
+            }
+
+            // Скрываем, если открыта любая страница меню игры (Escape, Настройки и т.д.)
+            if (MenuManager.instance != null && currentMenuPageField != null)
+            {
+                try
+                {
+                    object page = currentMenuPageField.GetValue(MenuManager.instance);
+                    if (page != null)
                     {
                         return true;
                     }
