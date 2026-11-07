@@ -84,6 +84,7 @@ namespace WorkableBoombox.UI
             showVolumeNotification = false;
             showScrubNotification = false;
             showTrackNotification = false;
+            isDownloading = false;
         }
 
         private static readonly System.Reflection.FieldInfo currentMenuStateField =
@@ -91,7 +92,12 @@ namespace WorkableBoombox.UI
 
         public bool ShouldHideHUD()
         {
-            if (SemiFunc.IsMainMenu() || SemiFunc.MenuLevel())
+            if (SemiFunc.IsMainMenu() || SemiFunc.MenuLevel() || SemiFunc.RunIsLobbyMenu())
+            {
+                return true;
+            }
+
+            if (GameDirector.instance != null && GameDirector.instance.currentState != GameDirector.gameState.Main)
             {
                 return true;
             }

@@ -70,19 +70,7 @@ namespace WorkableBoombox.Interaction
             KeyCode playlistKey = ModConfig.PlaylistKey != null ? ModConfig.PlaylistKey.Value : KeyCode.P;
             if (Input.GetKeyDown(playlistKey))
             {
-                CustomBoomboxItem target = currentTargetBoombox;
-                if (target == null)
-                {
-                    foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
-                    {
-                        if (b != null && b.IsBoomboxInPocket())
-                        {
-                            target = b;
-                            break;
-                        }
-                    }
-                }
-
+                CustomBoomboxItem target = currentTargetBoombox ?? GetPocketBoombox();
                 if (target != null && BoomboxPlaylistUI.Instance != null)
                 {
                     BoomboxPlaylistUI.Instance.ToggleMenu(target);
@@ -206,6 +194,18 @@ namespace WorkableBoombox.Interaction
             }
         }
 
+        private CustomBoomboxItem GetPocketBoombox()
+        {
+            foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
+            {
+                if (b != null && b.IsBoomboxInPocket())
+                {
+                    return b;
+                }
+            }
+            return null;
+        }
+
         private void HandleInput()
         {
             if (BoomboxPlaylistUI.Instance != null && BoomboxPlaylistUI.Instance.IsOpen)
@@ -213,7 +213,8 @@ namespace WorkableBoombox.Interaction
                 return;
             }
 
-            if (currentTargetBoombox == null)
+            CustomBoomboxItem activeBoombox = currentTargetBoombox ?? GetPocketBoombox();
+            if (activeBoombox == null)
             {
                 isHoldingNextTrackKey = false;
                 didScrubDuringHold = false;
@@ -235,7 +236,7 @@ namespace WorkableBoombox.Interaction
             {
                 if (BoomboxPlaylistUI.Instance != null)
                 {
-                    BoomboxPlaylistUI.Instance.ToggleMenu(currentTargetBoombox);
+                    BoomboxPlaylistUI.Instance.ToggleMenu(activeBoombox);
                     return;
                 }
             }
@@ -243,32 +244,32 @@ namespace WorkableBoombox.Interaction
             // 0.1 Перезапуск трека с 00:00 [Z]
             if (Input.GetKeyDown(restartKey))
             {
-                if (currentTargetBoombox != null && currentTargetBoombox.IsPlaying)
+                if (activeBoombox.IsPlaying)
                 {
-                    currentTargetBoombox.RestartTrack();
-                    UpdateHUD();
+                    activeBoombox.RestartTrack();
+                    if (currentTargetBoombox != null) UpdateHUD();
                 }
             }
 
             // 1. Включение / Выключение [E]
             if (Input.GetKeyDown(toggleKey))
             {
-                currentTargetBoombox.TogglePlay();
-                UpdateHUD();
+                activeBoombox.TogglePlay();
+                if (currentTargetBoombox != null) UpdateHUD();
             }
 
             // 2. Смена режима зацикливания [R] (Выкл -> Цикл -> Единый цикл)
             if (Input.GetKeyDown(loopKey))
             {
-                currentTargetBoombox.CycleLoopMode();
-                UpdateHUD();
+                activeBoombox.CycleLoopMode();
+                if (currentTargetBoombox != null) UpdateHUD();
             }
 
             // 3. Переключение перемешивания [T] (Вкл / Выкл)
             if (Input.GetKeyDown(shuffleKey))
             {
-                currentTargetBoombox.ToggleShuffle();
-                UpdateHUD();
+                activeBoombox.ToggleShuffle();
+                if (currentTargetBoombox != null) UpdateHUD();
             }
 
             // 4. Отслеживание зажатия [F]
@@ -287,7 +288,7 @@ namespace WorkableBoombox.Interaction
                 {
                     didScrubDuringHold = true;
                     float scrubSeconds = scrollDelta * ModConfig.ScrubStepSeconds.Value;
-                    currentTargetBoombox.ScrubTime(scrubSeconds);
+                    activeBoombox.ScrubTime(scrubSeconds);
                 }
             }
 
@@ -296,8 +297,8 @@ namespace WorkableBoombox.Interaction
             {
                 if (isHoldingNextTrackKey && !didScrubDuringHold)
                 {
-                    currentTargetBoombox.NextTrack();
-                    UpdateHUD();
+                    activeBoombox.NextTrack();
+                    if (currentTargetBoombox != null) UpdateHUD();
                 }
 
                 isHoldingNextTrackKey = false;
@@ -320,8 +321,8 @@ namespace WorkableBoombox.Interaction
                     didScrollVolumeDuringHold = true;
                     float step = (ModConfig.VolumeStepPercent != null ? ModConfig.VolumeStepPercent.Value : 5f) / 100f;
                     float volumeDelta = (scrollDelta > 0 ? 1f : -1f) * step;
-                    currentTargetBoombox.AdjustVolume(volumeDelta);
-                    UpdateHUD();
+                    activeBoombox.AdjustVolume(volumeDelta);
+                    if (currentTargetBoombox != null) UpdateHUD();
                 }
             }
 
@@ -330,8 +331,8 @@ namespace WorkableBoombox.Interaction
             {
                 if (isHoldingVolumeKey && !didScrollVolumeDuringHold)
                 {
-                    currentTargetBoombox.ToggleMute();
-                    UpdateHUD();
+                    activeBoombox.ToggleMute();
+                    if (currentTargetBoombox != null) UpdateHUD();
                 }
 
                 isHoldingVolumeKey = false;

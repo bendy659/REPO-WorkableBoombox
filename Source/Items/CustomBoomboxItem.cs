@@ -1546,15 +1546,19 @@ namespace WorkableBoombox.Items
 
         private void EnsureVisualReferences()
         {
-            if (Light1 == null || Light2 == null)
+            if (Light1 == null || !Light1.transform.IsChildOf(transform) || Light2 == null || !Light2.transform.IsChildOf(transform))
             {
                 Light[] allLights = GetComponentsInChildren<Light>(true);
-                if (allLights.Length > 0 && Light1 == null) Light1 = allLights[0];
-                if (allLights.Length > 1 && Light2 == null) Light2 = allLights[1];
+                Light1 = allLights.Length > 0 ? allLights[0] : null;
+                Light2 = allLights.Length > 1 ? allLights[1] : null;
             }
 
-            if (Speaker1 == null || Speaker2 == null)
+            if (Speaker1 == null || !Speaker1.IsChildOf(transform) || Speaker2 == null || !Speaker2.IsChildOf(transform))
             {
+                Speaker1 = null;
+                Speaker2 = null;
+                SpeakerRenderer1 = null;
+                SpeakerRenderer2 = null;
                 Transform[] transforms = GetComponentsInChildren<Transform>(true);
                 foreach (Transform t in transforms)
                 {
@@ -1563,8 +1567,14 @@ namespace WorkableBoombox.Items
                 }
             }
 
-            if (Speaker1 != null && SpeakerRenderer1 == null) SpeakerRenderer1 = Speaker1.GetComponent<Renderer>();
-            if (Speaker2 != null && SpeakerRenderer2 == null) SpeakerRenderer2 = Speaker2.GetComponent<Renderer>();
+            if (Speaker1 != null && (SpeakerRenderer1 == null || !SpeakerRenderer1.transform.IsChildOf(transform)))
+            {
+                SpeakerRenderer1 = Speaker1.GetComponent<Renderer>();
+            }
+            if (Speaker2 != null && (SpeakerRenderer2 == null || !SpeakerRenderer2.transform.IsChildOf(transform)))
+            {
+                SpeakerRenderer2 = Speaker2.GetComponent<Renderer>();
+            }
         }
 
         private void AnimateVisuals()
@@ -1626,20 +1636,28 @@ namespace WorkableBoombox.Items
             }
 
             // Восстанавливаем оригинальную яркость световых спотов бумбокса
-            float lightIntensity = (3.5f + smoothedRMS * 10.0f) * brightness;
+            float lightIntensity = (3.5f + smoothedRMS * 8.0f) * brightness;
 
             if (Light1 != null)
             {
+                Light1.type = LightType.Spot;
+                Light1.shadows = LightShadows.None;
+                if (Light1.range < 6.0f) Light1.range = 6.0f;
+                if (Light1.spotAngle < 65f) Light1.spotAngle = 65f;
                 Light1.enabled = true;
                 Light1.color = glowColor;
-                Light1.intensity = Mathf.Lerp(Light1.intensity, (3.5f + smoothedRMS * 8.0f) * brightness, Time.deltaTime * 10f);
+                Light1.intensity = Mathf.Lerp(Light1.intensity, lightIntensity, Time.deltaTime * 10f);
             }
 
             if (Light2 != null)
             {
+                Light2.type = LightType.Spot;
+                Light2.shadows = LightShadows.None;
+                if (Light2.range < 6.0f) Light2.range = 6.0f;
+                if (Light2.spotAngle < 65f) Light2.spotAngle = 65f;
                 Light2.enabled = true;
                 Light2.color = glowColor;
-                Light2.intensity = Mathf.Lerp(Light2.intensity, (3.5f + smoothedRMS * 8.0f) * brightness, Time.deltaTime * 10f);
+                Light2.intensity = Mathf.Lerp(Light2.intensity, lightIntensity, Time.deltaTime * 10f);
             }
         }
 
@@ -1899,13 +1917,45 @@ namespace WorkableBoombox.Items
                         AudioSource.Play();
                     }
                 }
+
+                // Корректируем ориентацию бумбокса при выкладывании/доставании из кармана:
+                // Разворачиваем бумбокс лицом (динамиками) к игроку и выравниваем строго вертикально (без наклона),
+                // чтобы он мягко и устойчиво приземлялся на ножки и не опрокидывался на спину
+                Transform vision = null;
+                if (SemiFunc.PlayerAvatarLocal() != null && SemiFunc.PlayerAvatarLocal().PlayerVisionTarget != null)
+                {
+                    vision = SemiFunc.PlayerAvatarLocal().PlayerVisionTarget.VisionTransform;
+                }
+                Vector3 lookDir = vision != null ? vision.forward : (Camera.main != null ? Camera.main.transform.forward : transform.forward);
+                lookDir.y = 0f;
+                if (lookDir.sqrMagnitude > 0.001f)
+                {
+                    Quaternion uprightRot = Quaternion.LookRotation(-lookDir.normalized, Vector3.up);
+                    transform.rotation = uprightRot;
+                    if (PhysGrabObject != null && PhysGrabObject.rb != null)
+                    {
+                        PhysGrabObject.rb.rotation = uprightRot;
+                        PhysGrabObject.rb.angularVelocity = Vector3.zero;
+                        PhysGrabObject.rb.velocity = new Vector3(PhysGrabObject.rb.velocity.x * 0.2f, PhysGrabObject.rb.velocity.y, PhysGrabObject.rb.velocity.z * 0.2f);
+                    }
+                }
             }
+
             EnsureVisualReferences();
 
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0.1f, 5f) : 1.0f;
             if (IsPlaying && (ModConfig.EnableLightMusic == null || ModConfig.EnableLightMusic.Value))
             {
-                if (Light1 != null) Light1.enabled = true;
-                if (Light2 != null) Light2.enabled = true;
+                if (Light1 != null)
+                {
+                    Light1.enabled = true;
+                    if (Light1.intensity < 1f) Light1.intensity = 3.5f * brightness;
+                }
+                if (Light2 != null)
+                {
+                    Light2.enabled = true;
+                    if (Light2.intensity < 1f) Light2.intensity = 3.5f * brightness;
+                }
             }
         }
 
