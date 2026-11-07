@@ -246,30 +246,31 @@ namespace WorkableBoombox.UI
             {
                 alignment = TextAnchor.MiddleLeft,
                 fontSize = 11,
-                normal = { textColor = Color.white }
+                normal = { textColor = new Color(0.85f, 0.85f, 0.9f) }
             };
 
             itemSelectedStyle = new GUIStyle(GUI.skin.button)
             {
-                normal = { background = selectedBgTexture, textColor = new Color(0.3f, 1f, 0.7f) },
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = 11
+                fontSize = 11,
+                normal = { textColor = Color.white }
             };
 
             playButtonStyle = new GUIStyle(GUI.skin.button)
             {
-                normal = { background = buttonBgTexture, textColor = Color.white },
                 fontStyle = FontStyle.Bold,
                 fontSize = 12,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
             };
 
             secondaryButtonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = 11,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.9f, 0.9f, 0.95f) }
             };
 
             inputFieldStyle = new GUIStyle(GUI.skin.textField)
@@ -280,27 +281,82 @@ namespace WorkableBoombox.UI
 
             actionButtonStyle = new GUIStyle(GUI.skin.button)
             {
-                normal = { background = buttonBgTexture, textColor = Color.white },
                 fontStyle = FontStyle.Bold,
                 fontSize = 11,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
             };
 
             cancelButtonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = 11,
                 fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.85f, 0.85f, 0.9f) }
             };
 
             deleteButtonStyle = new GUIStyle(GUI.skin.button)
             {
-                normal = { background = deleteBgTexture, textColor = new Color(1f, 0.45f, 0.45f) },
-                hover = { textColor = Color.white },
                 fontStyle = FontStyle.Bold,
                 fontSize = 11,
-                alignment = TextAnchor.MiddleCenter
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
             };
+        }
+
+        private static bool DrawGlassButton(Rect rect, string text, GUIStyle style, Color tint)
+        {
+            Color prev = GUI.color;
+            GUI.color = tint;
+            bool clicked = GUI.Button(rect, text, style);
+            GUI.color = prev;
+            return clicked;
+        }
+
+        private static Texture2D cursorTexture;
+
+        private static void InitCursorTexture()
+        {
+            if (cursorTexture != null) return;
+            cursorTexture = new Texture2D(16, 16, TextureFormat.RGBA32, false);
+            cursorTexture.filterMode = FilterMode.Point;
+
+            string[] pattern = new string[]
+            {
+                "#...............",
+                "##..............",
+                "#*#.............",
+                "#**#............",
+                "#***#...........",
+                "#****#..........",
+                "#*****#.........",
+                "#******#........",
+                "#*******#.......",
+                "#****#####......",
+                "#**#**#.........",
+                "#*#..#*#........",
+                "##....#*#.......",
+                "#......#*#......",
+                "........#*#.....",
+                ".........##....."
+            };
+
+            for (int r = 0; r < 16; r++)
+            {
+                int y = 15 - r;
+                string row = pattern[r];
+                for (int x = 0; x < 16; x++)
+                {
+                    char c = row[x];
+                    if (c == '#')
+                        cursorTexture.SetPixel(x, y, new Color(0.05f, 0.05f, 0.05f, 1f));
+                    else if (c == '*')
+                        cursorTexture.SetPixel(x, y, new Color(0.95f, 0.95f, 0.95f, 1f));
+                    else
+                        cursorTexture.SetPixel(x, y, Color.clear);
+                }
+            }
+            cursorTexture.Apply();
         }
 
         private void OnGUI()
@@ -325,11 +381,11 @@ namespace WorkableBoombox.UI
 
             // 1. Верхняя панель заголовка
             Rect headerRect = new Rect(posX + 10f, posY + 10f, totalWidth - 20f, 32f);
-            string titleText = "🎵 BOOMBOX PLAYLISTS";
+            string titleText = "BOOMBOX PLAYLISTS";
             GUI.Label(headerRect, titleText, headerTitleStyle);
 
             // Кнопка закрытия [X]
-            if (GUI.Button(new Rect(posX + totalWidth - 36f, posY + 10f, 26f, 26f), "✕", secondaryButtonStyle))
+            if (DrawGlassButton(new Rect(posX + totalWidth - 36f, posY + 10f, 26f, 26f), "X", secondaryButtonStyle, new Color(1f, 0.45f, 0.45f)))
             {
                 CloseMenu();
                 return;
@@ -393,7 +449,8 @@ namespace WorkableBoombox.UI
                 bool isSelected = string.Equals(selectedPlayerNick, pNick, StringComparison.OrdinalIgnoreCase);
 
                 string label = $"{pNick} ({plCount})";
-                if (GUI.Button(new Rect(0, itemY, col1Width - 20f, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                Color pColor = isSelected ? new Color(0.35f, 0.78f, 1f) : Color.white;
+                if (DrawGlassButton(new Rect(0, itemY, col1Width - 20f, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle, pColor))
                 {
                     selectedPlayerNick = pNick;
                     selectedPlaylistName = null;
@@ -430,29 +487,30 @@ namespace WorkableBoombox.UI
                     bool isSelected = string.Equals(selectedPlaylistName, plName, StringComparison.OrdinalIgnoreCase);
 
                     string label = $"{plName} [{trackCount}]";
+                    Color plColor = isSelected ? new Color(0.35f, 0.78f, 1f) : Color.white;
 
                     if (isLocalPlayerSelected)
                     {
                         float labelW = col2Width - 78f;
-                        if (GUI.Button(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                        if (DrawGlassButton(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle, plColor))
                         {
                             selectedPlaylistName = plName;
                             selectedTrackIndex = 0;
                         }
 
                         // Кнопка экспорта плейлиста в буфер обмена
-                        if (GUI.Button(new Rect(col2Width - 74f, itemY, 24f, 28f), "📋", secondaryButtonStyle))
+                        if (DrawGlassButton(new Rect(col2Width - 74f, itemY, 24f, 28f), "[^]", secondaryButtonStyle, new Color(0.85f, 0.85f, 0.95f)))
                         {
                             string json = PlaylistManager.Instance.ExportPlaylistJson(plName);
                             if (!string.IsNullOrEmpty(json))
                             {
                                 GUIUtility.systemCopyBuffer = json;
-                                BoomboxHUD.Instance?.ShowTrackNotification($"📋 Copied '{plName}' JSON to clipboard!");
+                                BoomboxHUD.Instance?.ShowTrackNotification($"Copied '{plName}' JSON to clipboard!");
                             }
                         }
 
                         // Кнопка удаления
-                        if (GUI.Button(new Rect(col2Width - 48f, itemY, 26f, 28f), "✕", deleteButtonStyle))
+                        if (DrawGlassButton(new Rect(col2Width - 48f, itemY, 26f, 28f), "X", deleteButtonStyle, new Color(1f, 0.35f, 0.35f)))
                         {
                             PlaylistManager.Instance.RemovePlaylist(plName);
                             if (string.Equals(selectedPlaylistName, plName, StringComparison.OrdinalIgnoreCase))
@@ -465,18 +523,18 @@ namespace WorkableBoombox.UI
                     else
                     {
                         float labelW = col2Width - 52f;
-                        if (GUI.Button(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                        if (DrawGlassButton(new Rect(0, itemY, labelW, 28f), label, isSelected ? itemSelectedStyle : itemLabelStyle, plColor))
                         {
                             selectedPlaylistName = plName;
                             selectedTrackIndex = 0;
                         }
 
                         // Кнопка импорта чужого плейлиста в локальные
-                        if (GUI.Button(new Rect(col2Width - 48f, itemY, 26f, 28f), "📥", secondaryButtonStyle))
+                        if (DrawGlassButton(new Rect(col2Width - 48f, itemY, 26f, 28f), "[+]", secondaryButtonStyle, new Color(0.4f, 0.85f, 1f)))
                         {
                             if (PlaylistManager.Instance.ImportPlaylistFromPlayer(selectedPlayerNick, plName, out string finalName))
                             {
-                                BoomboxHUD.Instance?.ShowTrackNotification($"📥 Imported '{finalName}' from {selectedPlayerNick}!");
+                                BoomboxHUD.Instance?.ShowTrackNotification($"Imported '{finalName}' from {selectedPlayerNick}!");
                             }
                         }
                     }
@@ -491,13 +549,13 @@ namespace WorkableBoombox.UI
                 if (!isAddingPlaylist && !isImportingPlaylist)
                 {
                     float halfBtnW = (col2Width - 24f) * 0.5f;
-                    if (GUI.Button(new Rect(0, itemY, halfBtnW, 28f), "+ New", secondaryButtonStyle))
+                    if (DrawGlassButton(new Rect(0, itemY, halfBtnW, 28f), "+ New", secondaryButtonStyle, Color.white))
                     {
                         isAddingPlaylist = true;
                         isImportingPlaylist = false;
                         newPlaylistInput = "";
                     }
-                    if (GUI.Button(new Rect(halfBtnW + 4f, itemY, halfBtnW, 28f), "📥 Import", secondaryButtonStyle))
+                    if (DrawGlassButton(new Rect(halfBtnW + 4f, itemY, halfBtnW, 28f), "Import", secondaryButtonStyle, Color.white))
                     {
                         isImportingPlaylist = true;
                         isAddingPlaylist = false;
@@ -513,7 +571,7 @@ namespace WorkableBoombox.UI
                     newPlaylistInput = GUI.TextField(new Rect(4f, itemY + 18f, col2Width - 28f, 20f), newPlaylistInput, inputFieldStyle);
 
                     float halfW = (col2Width - 32f) * 0.5f;
-                    if (GUI.Button(new Rect(4f, itemY + 40f, halfW, 20f), "✓ Create", actionButtonStyle))
+                    if (DrawGlassButton(new Rect(4f, itemY + 40f, halfW, 20f), "Create", actionButtonStyle, new Color(0.35f, 0.95f, 0.55f)))
                     {
                         if (!string.IsNullOrWhiteSpace(newPlaylistInput))
                         {
@@ -523,7 +581,7 @@ namespace WorkableBoombox.UI
                             newPlaylistInput = "";
                         }
                     }
-                    if (GUI.Button(new Rect(4f + halfW + 4f, itemY + 40f, halfW, 20f), "✕ Cancel", cancelButtonStyle))
+                    if (DrawGlassButton(new Rect(4f + halfW + 4f, itemY + 40f, halfW, 20f), "Cancel", cancelButtonStyle, Color.white))
                     {
                         isAddingPlaylist = false;
                         newPlaylistInput = "";
@@ -539,7 +597,7 @@ namespace WorkableBoombox.UI
                     GUI.Label(new Rect(4f, itemY + 40f, col2Width - 28f, 16f), "Paste JSON or Text / URLs:", itemLabelStyle);
                     importTextInput = GUI.TextArea(new Rect(4f, itemY + 56f, col2Width - 28f, 48f), importTextInput, inputFieldStyle);
 
-                    if (GUI.Button(new Rect(4f, itemY + 108f, col2Width - 28f, 22f), "📋 Paste from Clipboard", secondaryButtonStyle))
+                    if (DrawGlassButton(new Rect(4f, itemY + 108f, col2Width - 28f, 22f), "Paste Clipboard", secondaryButtonStyle, Color.white))
                     {
                         if (!string.IsNullOrEmpty(GUIUtility.systemCopyBuffer))
                         {
@@ -548,17 +606,17 @@ namespace WorkableBoombox.UI
                     }
 
                     float halfW = (col2Width - 32f) * 0.5f;
-                    if (GUI.Button(new Rect(4f, itemY + 134f, halfW, 22f), "✓ Import", actionButtonStyle))
+                    if (DrawGlassButton(new Rect(4f, itemY + 134f, halfW, 22f), "Import", actionButtonStyle, new Color(0.35f, 0.95f, 0.55f)))
                     {
                         if (PlaylistManager.Instance.ImportPlaylistFromText(importTextInput, importPlaylistNameInput, out string finalPl, out int count))
                         {
                             selectedPlaylistName = finalPl;
                             isImportingPlaylist = false;
                             importTextInput = "";
-                            BoomboxHUD.Instance?.ShowTrackNotification($"📥 Imported {count} tracks into '{finalPl}'!");
+                            BoomboxHUD.Instance?.ShowTrackNotification($"Imported {count} tracks into '{finalPl}'!");
                         }
                     }
-                    if (GUI.Button(new Rect(4f + halfW + 4f, itemY + 134f, halfW, 22f), "✕ Cancel", cancelButtonStyle))
+                    if (DrawGlassButton(new Rect(4f + halfW + 4f, itemY + 134f, halfW, 22f), "Cancel", cancelButtonStyle, Color.white))
                     {
                         isImportingPlaylist = false;
                         importTextInput = "";
@@ -589,12 +647,13 @@ namespace WorkableBoombox.UI
                     string tUrl = trackKvp.Value;
                     bool isSelected = (idx == selectedTrackIndex);
 
-                    string prefix = tUrl.StartsWith("local:", StringComparison.OrdinalIgnoreCase) ? "📁 " : "▶ ";
+                    string prefix = tUrl.StartsWith("local:", StringComparison.OrdinalIgnoreCase) ? "[L] " : "▶ ";
                     string label = $"{idx + 1}. {prefix}{tName}";
 
                     float btnWidth = col3Width - 52f;
+                    Color trkColor = isSelected ? new Color(0.35f, 0.78f, 1f) : Color.white;
 
-                    if (GUI.Button(new Rect(0, itemY, btnWidth, 26f), label, isSelected ? itemSelectedStyle : itemLabelStyle))
+                    if (DrawGlassButton(new Rect(0, itemY, btnWidth, 26f), label, isSelected ? itemSelectedStyle : itemLabelStyle, trkColor))
                     {
                         selectedTrackIndex = idx;
                         // Клик по треку = сразу начать воспроизведение с выбранного трека!
@@ -603,7 +662,7 @@ namespace WorkableBoombox.UI
 
                     if (isLocalPlayerSelected)
                     {
-                        if (GUI.Button(new Rect(col3Width - 48f, itemY, 26f, 26f), "✕", deleteButtonStyle))
+                        if (DrawGlassButton(new Rect(col3Width - 48f, itemY, 26f, 26f), "X", deleteButtonStyle, new Color(1f, 0.35f, 0.35f)))
                         {
                             PlaylistManager.Instance.RemoveTrackFromPlaylist(selectedPlaylistName, tName);
                             break;
@@ -612,12 +671,12 @@ namespace WorkableBoombox.UI
                     else
                     {
                         // Кнопка импорта чужого трека в локальный плейлист
-                        if (GUI.Button(new Rect(col3Width - 48f, itemY, 26f, 26f), "📥", secondaryButtonStyle))
+                        if (DrawGlassButton(new Rect(col3Width - 48f, itemY, 26f, 26f), "[+]", secondaryButtonStyle, new Color(0.4f, 0.85f, 1f)))
                         {
                             string targetPl = !string.IsNullOrEmpty(selectedPlaylistName) ? selectedPlaylistName : "Imported Tracks";
                             if (PlaylistManager.Instance.ImportTrackFromPlayer(selectedPlayerNick, selectedPlaylistName, tName, targetPl))
                             {
-                                BoomboxHUD.Instance?.ShowTrackNotification($"📥 Added '{tName}' to '{targetPl}'!");
+                                BoomboxHUD.Instance?.ShowTrackNotification($"Added '{tName}' to '{targetPl}'!");
                             }
                         }
                     }
@@ -636,7 +695,7 @@ namespace WorkableBoombox.UI
             {
                 if (!isAddingTrack)
                 {
-                    if (GUI.Button(new Rect(0, itemY, col3Width - 20f, 26f), "+", secondaryButtonStyle))
+                    if (DrawGlassButton(new Rect(0, itemY, col3Width - 20f, 26f), "+ Add Track", secondaryButtonStyle, Color.white))
                     {
                         isAddingTrack = true;
                         newTrackTitleInput = "";
@@ -652,7 +711,7 @@ namespace WorkableBoombox.UI
 
                     GUI.Label(new Rect(6f, itemY + 40f, col3Width - 32f, 16f), "URL (YouTube / local:track.mp3):", itemLabelStyle);
                     newTrackUrlInput = GUI.TextField(new Rect(6f, itemY + 56f, col3Width - 106f, 20f), newTrackUrlInput, inputFieldStyle);
-                    if (GUI.Button(new Rect(col3Width - 96f, itemY + 56f, 70f, 20f), "📋 Paste", secondaryButtonStyle))
+                    if (DrawGlassButton(new Rect(col3Width - 96f, itemY + 56f, 70f, 20f), "Paste", secondaryButtonStyle, Color.white))
                     {
                         if (!string.IsNullOrEmpty(GUIUtility.systemCopyBuffer))
                         {
@@ -665,7 +724,7 @@ namespace WorkableBoombox.UI
                     }
 
                     float halfTrackW = (col3Width - 44f) * 0.5f;
-                    if (GUI.Button(new Rect(6f, itemY + 82f, halfTrackW, 24f), "✓ Add", actionButtonStyle))
+                    if (DrawGlassButton(new Rect(6f, itemY + 82f, halfTrackW, 24f), "Add", actionButtonStyle, new Color(0.35f, 0.95f, 0.55f)))
                     {
                         if (!string.IsNullOrWhiteSpace(newTrackTitleInput) && !string.IsNullOrWhiteSpace(newTrackUrlInput))
                         {
@@ -675,7 +734,7 @@ namespace WorkableBoombox.UI
                             newTrackUrlInput = "";
                         }
                     }
-                    if (GUI.Button(new Rect(6f + halfTrackW + 8f, itemY + 82f, halfTrackW, 24f), "✕ Cancel", cancelButtonStyle))
+                    if (DrawGlassButton(new Rect(6f + halfTrackW + 8f, itemY + 82f, halfTrackW, 24f), "Cancel", cancelButtonStyle, Color.white))
                     {
                         isAddingTrack = false;
                         newTrackTitleInput = "";
@@ -694,8 +753,9 @@ namespace WorkableBoombox.UI
             Rect startPlRect = new Rect(x1, bottomY, 280f, btnHeight);
             string startBtnText = "▶ Play Entire Playlist";
             bool hasValidSelection = !string.IsNullOrEmpty(selectedPlayerNick) && !string.IsNullOrEmpty(selectedPlaylistName) && trackTotal > 0;
+            Color playColor = hasValidSelection ? new Color(0.35f, 0.95f, 0.55f) : new Color(0.55f, 0.55f, 0.55f);
 
-            if (GUI.Button(startPlRect, startBtnText, playButtonStyle))
+            if (DrawGlassButton(startPlRect, startBtnText, playButtonStyle, playColor))
             {
                 if (hasValidSelection)
                 {
@@ -705,8 +765,8 @@ namespace WorkableBoombox.UI
 
             // Кнопка: Перезагрузить плейлисты
             Rect reloadRect = new Rect(x1 + 290f, bottomY, 220f, btnHeight);
-            string reloadText = "🔄 Reload Playlists (F5)";
-            if (GUI.Button(reloadRect, reloadText, secondaryButtonStyle))
+            string reloadText = "Reload Playlists (F5)";
+            if (DrawGlassButton(reloadRect, reloadText, secondaryButtonStyle, Color.white))
             {
                 PlaylistManager.Instance.ReloadAndSync();
             }
@@ -715,6 +775,11 @@ namespace WorkableBoombox.UI
             Rect hintRect = new Rect(posX + totalWidth - 300f, bottomY + 6f, 285f, 26f);
             string hintText = "[Click track] = play from here";
             GUI.Label(hintRect, hintText, colHeaderStyle);
+
+            // Отрисовка курсора поверх всего окна интерфейса
+            InitCursorTexture();
+            Vector2 mousePos = Event.current.mousePosition;
+            GUI.DrawTexture(new Rect(mousePos.x, mousePos.y, 16f, 16f), cursorTexture);
         }
 
         private void StartPlayback(int startingIndex)

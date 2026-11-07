@@ -217,27 +217,6 @@ namespace WorkableBoombox.Items
                 UnityEngine.Object.DontDestroyOnLoad(customPrefab);
                 customPrefab.transform.position = new Vector3(0f, 500f, 0f);
 
-                // Поворачиваем визуальную часть на 180 градусов по Y, чтобы бумбокс всегда смотрел динамиками на игрока
-                for (int i = 0; i < customPrefab.transform.childCount; i++)
-                {
-                    Transform child = customPrefab.transform.GetChild(i);
-                    child.localPosition = Quaternion.Euler(0f, 180f, 0f) * child.localPosition;
-                    child.localRotation = Quaternion.Euler(0f, 180f, 0f) * child.localRotation;
-                }
-
-                // Корректируем центр захвата PhysGrabObject и коллайдеры на корне в соответствии с разворотом
-                PhysGrabObject originalPhysGrab = customPrefab.GetComponent<PhysGrabObject>();
-                if (originalPhysGrab != null)
-                {
-                    originalPhysGrab.centerPoint = Quaternion.Euler(0f, 180f, 0f) * originalPhysGrab.centerPoint;
-                }
-
-                BoxCollider rootBox = customPrefab.GetComponent<BoxCollider>();
-                if (rootBox != null)
-                {
-                    rootBox.center = Quaternion.Euler(0f, 180f, 0f) * rootBox.center;
-                }
-
                 // Сохраняем ссылки на динамики и свет
                 ValuableBoombox oldBoombox = customPrefab.GetComponent<ValuableBoombox>();
                 Transform sp1 = oldBoombox != null ? oldBoombox.speaker1 : null;

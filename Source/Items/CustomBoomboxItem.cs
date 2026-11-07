@@ -1579,11 +1579,13 @@ namespace WorkableBoombox.Items
             float emissionMult = (0.5f + smoothedRMS * 1.5f) * brightness;
             if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null)
             {
+                SpeakerRenderer1.material.EnableKeyword("_EMISSION");
                 SpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
 
             if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null)
             {
+                SpeakerRenderer2.material.EnableKeyword("_EMISSION");
                 SpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
 
@@ -1598,10 +1600,6 @@ namespace WorkableBoombox.Items
                 Light1.enabled = true;
                 Light1.color = glowColor;
                 Light1.intensity = lightIntensity;
-                if (Speaker1 != null)
-                {
-                    Light1.transform.position = Speaker1.position + Speaker1.forward * 0.12f;
-                }
             }
 
             if (Light2 != null)
@@ -1613,10 +1611,6 @@ namespace WorkableBoombox.Items
                 Light2.enabled = true;
                 Light2.color = glowColor;
                 Light2.intensity = lightIntensity;
-                if (Speaker2 != null)
-                {
-                    Light2.transform.position = Speaker2.position + Speaker2.forward * 0.12f;
-                }
             }
         }
 
@@ -1798,7 +1792,7 @@ namespace WorkableBoombox.Items
             // Небольшой левитирующий боб-эффект
             float bob = Mathf.Sin(Time.time * 2.5f) * 0.03f;
             Vector3 targetPos = anchor.position - anchor.forward * 0.32f + anchor.up * (0.16f + bob) + anchor.right * 0.22f;
-            Quaternion targetRot = anchor.rotation;
+            Quaternion targetRot = anchor.rotation * Quaternion.Euler(0f, 180f, 0f);
 
             pocketVisual.transform.position = Vector3.Lerp(pocketVisual.transform.position, targetPos, Time.deltaTime * 20f);
             pocketVisual.transform.rotation = Quaternion.Slerp(pocketVisual.transform.rotation, targetRot, Time.deltaTime * 20f);
@@ -1878,6 +1872,12 @@ namespace WorkableBoombox.Items
                 }
             }
             EnsureVisualReferences();
+
+            if (IsPlaying && (ModConfig.EnableLightMusic == null || ModConfig.EnableLightMusic.Value))
+            {
+                if (Light1 != null) Light1.enabled = true;
+                if (Light2 != null) Light2.enabled = true;
+            }
         }
 
         private void AnimatePocketVisuals()
@@ -1927,11 +1927,13 @@ namespace WorkableBoombox.Items
             float pocketEmission = (0.5f + smoothedRMS * 1.5f) * brightness;
             if (pocketSpeakerRenderer1 != null && pocketSpeakerRenderer1.material != null)
             {
+                pocketSpeakerRenderer1.material.EnableKeyword("_EMISSION");
                 pocketSpeakerRenderer1.material.SetColor("_EmissionColor", glowColor * pocketEmission);
             }
 
             if (pocketSpeakerRenderer2 != null && pocketSpeakerRenderer2.material != null)
             {
+                pocketSpeakerRenderer2.material.EnableKeyword("_EMISSION");
                 pocketSpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * pocketEmission);
             }
         }
