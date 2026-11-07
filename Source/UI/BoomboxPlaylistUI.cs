@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using WorkableBoombox.Config;
 using WorkableBoombox.Items;
 using WorkableBoombox.Localization;
@@ -64,6 +65,20 @@ namespace WorkableBoombox.UI
             DontDestroyOnLoad(gameObject);
 
             InitTextures();
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (IsOpen)
+            {
+                CloseMenu();
+            }
         }
 
         private void InitTextures()

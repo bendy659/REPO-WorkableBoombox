@@ -1633,6 +1633,8 @@ namespace WorkableBoombox.Items
                 Light1.enabled = true;
                 Light1.color = glowColor;
                 Light1.intensity = lightIntensity;
+                Light1.renderMode = LightRenderMode.ForcePixel;
+                if (Light1.range < 8.0f) Light1.range = 8.0f;
             }
 
             if (Light2 != null)
@@ -1640,6 +1642,8 @@ namespace WorkableBoombox.Items
                 Light2.enabled = true;
                 Light2.color = glowColor;
                 Light2.intensity = lightIntensity;
+                Light2.renderMode = LightRenderMode.ForcePixel;
+                if (Light2.range < 8.0f) Light2.range = 8.0f;
             }
         }
 
@@ -1885,6 +1889,13 @@ namespace WorkableBoombox.Items
                     pocketAudioSource.Stop();
                 }
 
+                // Разворачиваем предмет на 180 градусов по Y, чтобы при выбрасывании из кармана он смотрел лицом на игрока
+                transform.rotation = transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                if (PhysGrabObject != null && PhysGrabObject.rb != null)
+                {
+                    PhysGrabObject.rb.rotation = transform.rotation;
+                }
+
                 // Восстанавливаем основной AudioSource при доставании из кармана
                 ApplyLocalVolume(CurrentVolume, IsMuted);
                 if (IsPlaying && AudioSource != null && AudioSource.clip != null)
@@ -1936,6 +1947,8 @@ namespace WorkableBoombox.Items
                 pocketLight1.enabled = true;
                 pocketLight1.color = glowColor;
                 pocketLight1.intensity = pocketIntensity;
+                pocketLight1.renderMode = LightRenderMode.ForcePixel;
+                if (pocketLight1.range < 8.0f) pocketLight1.range = 8.0f;
             }
 
             if (pocketLight2 != null)
@@ -1943,6 +1956,8 @@ namespace WorkableBoombox.Items
                 pocketLight2.enabled = true;
                 pocketLight2.color = glowColor;
                 pocketLight2.intensity = pocketIntensity;
+                pocketLight2.renderMode = LightRenderMode.ForcePixel;
+                if (pocketLight2.range < 8.0f) pocketLight2.range = 8.0f;
             }
 
             float pocketEmission = (1.0f + smoothedRMS * 2.0f) * brightness;

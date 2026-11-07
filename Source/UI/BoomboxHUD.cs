@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using WorkableBoombox.Config;
 using WorkableBoombox.Localization;
 
@@ -68,6 +69,61 @@ namespace WorkableBoombox.UI
             backgroundTexture = new Texture2D(1, 1);
             backgroundTexture.SetPixel(0, 0, new Color(0.05f, 0.05f, 0.08f, 0.85f));
             backgroundTexture.Apply();
+
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            showHoverPrompt = false;
+            showVolumeNotification = false;
+            showScrubNotification = false;
+            showTrackNotification = false;
+        }
+
+        private static readonly System.Reflection.FieldInfo currentMenuPageField =
+            typeof(MenuManager).GetField("currentMenuPage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        public bool ShouldHideHUD()
+        {
+            if (SemiFunc.IsMainMenu() || SemiFunc.MenuLevel())
+            {
+                return true;
+            }
+
+            if (LoadingUI.instance != null && LoadingUI.instance.gameObject.activeInHierarchy)
+            {
+                return true;
+            }
+
+            if (MenuManager.instance != null && currentMenuPageField != null)
+            {
+                try
+                {
+                    if (currentMenuPageField.GetValue(MenuManager.instance) != null)
+                    {
+                        return true;
+                    }
+                }
+                catch { }
+            }
+
+            if (BoomboxPlaylistUI.Instance != null && BoomboxPlaylistUI.Instance.IsOpen)
+            {
+                return true;
+            }
+
+            if (ChatManager.instance != null && ChatManager.instance.StateIsActive())
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private void Update()
@@ -185,6 +241,11 @@ namespace WorkableBoombox.UI
 
         private void OnGUI()
         {
+            if (ShouldHideHUD())
+            {
+                return;
+            }
+
             InitStyles();
 
             // 1. Подсказка взаимодействия (рисуется чистыми GUI.Label без тяжелого GUILayout-паса)

@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using WorkableBoombox.Config;
 using WorkableBoombox.Items;
 using WorkableBoombox.Localization;
@@ -31,10 +32,27 @@ namespace WorkableBoombox.Interaction
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            ClearTarget();
         }
 
         private void Update()
         {
+            if (BoomboxHUD.Instance != null && BoomboxHUD.Instance.ShouldHideHUD())
+            {
+                ClearTarget();
+                return;
+            }
+
             HandleGlobalShortcuts();
             FindTargetBoombox();
             HandleInput();
@@ -43,6 +61,33 @@ namespace WorkableBoombox.Interaction
 
         private void HandleGlobalShortcuts()
         {
+            // Позволяем открывать меню плейлистов [P] даже если бумбокс находится в кармане (companion mode)
+            if (BoomboxPlaylistUI.Instance != null && BoomboxPlaylistUI.Instance.IsOpen)
+            {
+                return;
+            }
+
+            KeyCode playlistKey = ModConfig.PlaylistKey != null ? ModConfig.PlaylistKey.Value : KeyCode.P;
+            if (Input.GetKeyDown(playlistKey))
+            {
+                CustomBoomboxItem target = currentTargetBoombox;
+                if (target == null)
+                {
+                    foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
+                    {
+                        if (b != null && b.IsBoomboxInPocket())
+                        {
+                            target = b;
+                            break;
+                        }
+                    }
+                }
+
+                if (target != null && BoomboxPlaylistUI.Instance != null)
+                {
+                    BoomboxPlaylistUI.Instance.ToggleMenu(target);
+                }
+            }
         }
 
         private void FindTargetBoombox()
@@ -93,22 +138,6 @@ namespace WorkableBoombox.Interaction
                     if (boombox != null)
                     {
                         SetTarget(boombox);
-                        return;
-                    }
-                }
-            }
-
-            // 3. Если не наведен взглядом — проверяем, экипирован ли бумбокс в инвентаре у локального игрока
-            foreach (CustomBoomboxItem b in CustomBoomboxItem.ActiveBoomboxes)
-            {
-                if (b == null || b.ItemEquippable == null) continue;
-
-                if (b.ItemEquippable.IsEquipped())
-                {
-                    PlayerAvatar owner = b.ItemEquippable.GetOwnerPlayerAvatar();
-                    if (owner != null && (owner == PlayerAvatar.instance || (owner.photonView != null && owner.photonView.IsMine)))
-                    {
-                        SetTarget(b);
                         return;
                     }
                 }
