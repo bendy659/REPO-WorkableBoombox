@@ -24,7 +24,7 @@ namespace WorkableBoombox.Localization
         public static string PromptRow1(string eKey, string fKey, string pKey) => $"[{eKey}] Play/Pause   |   [{fKey}] Next Track   |   [{pKey}] Playlists";
         public static string PromptRow2(string rKey, string loopStr, string tKey, string shuffleStr) => $"[{rKey}] Loop: {loopStr}   |   [{tKey}] Shuffle: {shuffleStr}";
         public static string PromptRow3(string vKey, int volumePercent, bool isMuted) => $"[{vKey}] Mute ({(isMuted ? "Muted" : volumePercent + "%")})   |   [Hold {vKey} + Scroll] Volume";
-        public static string PromptRow4(string fKey) => $"[Hold {fKey} + Scroll] Scrub Time (-/+ 5s)";
+        public static string PromptRow4(string fKey, string zKey) => $"[{zKey}] Restart Track   |   [Hold {fKey} + Scroll] Scrub Time (-/+ 5s)";
 
         public static string ItemDescription => "A workable portable boombox that plays custom music.";
     }

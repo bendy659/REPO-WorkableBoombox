@@ -189,6 +189,7 @@ namespace WorkableBoombox.Interaction
             KeyCode shuffleKey = ModConfig.ShuffleKey.Value;
             KeyCode volumeKey = ModConfig.VolumeKey.Value;
             KeyCode playlistKey = ModConfig.PlaylistKey.Value;
+            KeyCode restartKey = ModConfig.RestartTrackKey != null ? ModConfig.RestartTrackKey.Value : KeyCode.Z;
 
             // 0. Меню плейлистов [P]
             if (Input.GetKeyDown(playlistKey))
@@ -197,6 +198,16 @@ namespace WorkableBoombox.Interaction
                 {
                     BoomboxPlaylistUI.Instance.ToggleMenu(currentTargetBoombox);
                     return;
+                }
+            }
+
+            // 0.1 Перезапуск трека с 00:00 [Z]
+            if (Input.GetKeyDown(restartKey))
+            {
+                if (currentTargetBoombox != null && currentTargetBoombox.IsPlaying)
+                {
+                    currentTargetBoombox.RestartTrack();
+                    UpdateHUD();
                 }
             }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Photon.Pun;
@@ -78,6 +79,20 @@ namespace WorkableBoombox.Items
         private float pendingSeekTime = -1f;
         private float seekDebounceTimer;
         private float trackSwitchCooldown;
+
+        // Synchronization State
+        private double livePlayStartTime = -1.0;
+        private AudioClip pendingReadyClip = null;
+        private int pendingReadyTrackIndex = -1;
+        private string pendingReadyTitle = null;
+        private float pendingReadyOffset = 0f;
+        private readonly HashSet<int> readyPlayerActors = new HashSet<int>();
+        private Coroutine syncWaitTimeoutCoroutine = null;
+        private Coroutine clientWaitTimeoutCoroutine = null;
+        private Coroutine scheduledPlaybackCoroutine = null;
+        private bool hasScheduledPlayback = false;
+        private double scheduledPlaybackTime = 0.0;
+        private float scheduledPlaybackOffset = 0f;
 
         // Audio reactivity
         private readonly float[] audioSamples = new float[128];
@@ -488,6 +503,22 @@ namespace WorkableBoombox.Items
             AdvanceQueueAndPlay(true);
         }
 
+        public void RestartTrack()
+        {
+            if (!IsPlaying || CurrentTrackIndex < 0)
+            {
+                return;
+            }
+
+            pendingSeekTime = -1f;
+            photonView.RPC(nameof(SeekTrackRPC), RpcTarget.All, 0f, PhotonNetwork.Time);
+
+            if (BoomboxHUD.Instance != null)
+            {
+                BoomboxHUD.Instance.ShowTrackNotification("⏮ Restart Track (00:00)");
+            }
+        }
+
         public void ScrubTime(float deltaSeconds)
         {
             AudioClip clip = (AudioSource != null && AudioSource.clip != null) ? AudioSource.clip :
@@ -664,6 +695,30 @@ namespace WorkableBoombox.Items
                 {
                     AudioSource.Stop();
                 }
+                if (pocketAudioSource != null && pocketAudioSource.isPlaying)
+                {
+                    pocketAudioSource.Stop();
+                }
+                TurnOffVisuals();
+
+                if (syncWaitTimeoutCoroutine != null)
+                {
+                    StopCoroutine(syncWaitTimeoutCoroutine);
+                    syncWaitTimeoutCoroutine = null;
+                }
+                if (clientWaitTimeoutCoroutine != null)
+                {
+                    StopCoroutine(clientWaitTimeoutCoroutine);
+                    clientWaitTimeoutCoroutine = null;
+                }
+                if (scheduledPlaybackCoroutine != null)
+                {
+                    StopCoroutine(scheduledPlaybackCoroutine);
+                    scheduledPlaybackCoroutine = null;
+                }
+                pendingReadyClip = null;
+                pendingReadyTrackIndex = -1;
+                hasScheduledPlayback = false;
             }
 
             BoomboxStateMemory.Save(this);
@@ -758,6 +813,36 @@ namespace WorkableBoombox.Items
             StartOffsetSeconds = startOffset;
             IsPlaying = true;
 
+            // Сброс состояния синхронизации для нового трека
+            livePlayStartTime = -1.0;
+            pendingReadyClip = null;
+            pendingReadyTrackIndex = -1;
+            hasScheduledPlayback = false;
+            readyPlayerActors.Clear();
+
+            if (syncWaitTimeoutCoroutine != null)
+            {
+                StopCoroutine(syncWaitTimeoutCoroutine);
+                syncWaitTimeoutCoroutine = null;
+            }
+            if (clientWaitTimeoutCoroutine != null)
+            {
+                StopCoroutine(clientWaitTimeoutCoroutine);
+                clientWaitTimeoutCoroutine = null;
+            }
+            if (scheduledPlaybackCoroutine != null)
+            {
+                StopCoroutine(scheduledPlaybackCoroutine);
+                scheduledPlaybackCoroutine = null;
+            }
+
+            int syncMode = ModConfig.SyncMode != null ? ModConfig.SyncMode.Value : 1;
+            bool isMultiplayerRoom = SemiFunc.IsMultiplayer() && PhotonNetwork.CurrentRoom != null && PhotonNetwork.CurrentRoom.PlayerCount > 1;
+            if (syncMode == 2 && isMultiplayerRoom && PhotonNetwork.IsMasterClient)
+            {
+                syncWaitTimeoutCoroutine = StartCoroutine(WaitForAllTimeout(trackIndex, startOffset));
+            }
+
             // Немедленно останавливаем воспроизведение предыдущего трека, пока загружается новый
             if (AudioSource != null && AudioSource.isPlaying)
             {
@@ -789,7 +874,7 @@ namespace WorkableBoombox.Items
                     {
                         if (clip != null && IsPlaying && CurrentTrackIndex == trackIndex)
                         {
-                            ApplyClipAndPlay(clip, startTime, startOffset, entry.Title);
+                            ApplyClipAndPlay(clip, trackIndex, startTime, startOffset, entry.Title);
                         }
                     }, err =>
                     {
@@ -812,35 +897,118 @@ namespace WorkableBoombox.Items
                 BoomboxAudioManager.TrackData track = BoomboxAudioManager.Instance.GetTrack(trackIndex);
                 if (track != null && track.Clip != null)
                 {
-                    ApplyClipAndPlay(track.Clip, startTime, startOffset, track.Title);
+                    ApplyClipAndPlay(track.Clip, trackIndex, startTime, startOffset, track.Title);
                 }
                 else
                 {
                     Plugin.Log.LogWarning($"[CustomBoombox] Track at index {trackIndex} not found locally.");
+                    if (isMultiplayerRoom && syncMode == 2)
+                    {
+                        photonView.RPC(nameof(ReportTrackReadyRPC), RpcTarget.MasterClient, PhotonNetwork.LocalPlayer.ActorNumber, trackIndex);
+                    }
                 }
             }
         }
 
-        private void ApplyClipAndPlay(AudioClip clip, double startTime, float startOffset, string title)
+        private void ApplyClipAndPlay(AudioClip clip, int trackIndex, double startTime, float startOffset, string title)
         {
             if (clip == null) return;
 
-            // Воспроизводим скачанный трек с самого начала
-            float targetOffset = startOffset;
-            if (startTime > 0 && targetOffset <= 0f)
+            int syncMode = ModConfig.SyncMode != null ? ModConfig.SyncMode.Value : 1;
+
+            // Режим 0: Без синхронизации (каждый слушает независимо сразу после скачивания)
+            if (syncMode == 0)
             {
+                float targetOffset = startOffset;
                 PlayStartTime = PhotonNetwork.Time;
-                targetOffset = 0f;
-            }
-            else if (startTime > 0)
-            {
-                double timePassed = PhotonNetwork.Time - startTime;
-                if (timePassed > 0)
-                {
-                    targetOffset = (float)(timePassed + startOffset);
-                }
+                StartOffsetSeconds = targetOffset;
+                PlayClipDirect(clip, targetOffset, title);
+                return;
             }
 
+            // Режим 2: Ждать пока загрузится у всех (коллективный синхро-старт)
+            if (syncMode == 2)
+            {
+                bool isMultiplayerRoom = SemiFunc.IsMultiplayer() && PhotonNetwork.CurrentRoom != null && PhotonNetwork.CurrentRoom.PlayerCount > 1;
+
+                // Если общий старт уже состоялся (по таймауту или все скачали раньше нас)
+                if (hasScheduledPlayback)
+                {
+                    hasScheduledPlayback = false;
+                    double elapsed = PhotonNetwork.Time - scheduledPlaybackTime;
+                    float targetOffset = (float)(elapsed + scheduledPlaybackOffset);
+                    if (targetOffset < clip.length)
+                    {
+                        PlayClipDirect(clip, targetOffset, title);
+                    }
+                    return;
+                }
+
+                if (isMultiplayerRoom)
+                {
+                    pendingReadyClip = clip;
+                    pendingReadyTrackIndex = trackIndex;
+                    pendingReadyTitle = title;
+                    pendingReadyOffset = startOffset;
+
+                    if (BoomboxHUD.Instance != null)
+                    {
+                        BoomboxHUD.Instance.ShowTrackNotification($"⏳ Ready! Waiting for players... ({title})");
+                    }
+
+                    if (clientWaitTimeoutCoroutine != null)
+                    {
+                        StopCoroutine(clientWaitTimeoutCoroutine);
+                    }
+                    clientWaitTimeoutCoroutine = StartCoroutine(ClientWaitForStartFallback(trackIndex));
+
+                    photonView.RPC(nameof(ReportTrackReadyRPC), RpcTarget.MasterClient, PhotonNetwork.LocalPlayer.ActorNumber, trackIndex);
+                    return;
+                }
+
+                // В одиночной игре стартуем сразу
+                PlayStartTime = PhotonNetwork.Time;
+                StartOffsetSeconds = startOffset;
+                PlayClipDirect(clip, startOffset, title);
+                return;
+            }
+
+            // Режим 1: Стримминг (первый запустивший задает 00:00, остальные синхронизируются по таймкоду)
+            if (livePlayStartTime <= 0)
+            {
+                // Мы первые завершили загрузку трека
+                livePlayStartTime = PhotonNetwork.Time;
+                PlayStartTime = livePlayStartTime;
+                StartOffsetSeconds = startOffset;
+
+                if (SemiFunc.IsMultiplayer())
+                {
+                    photonView.RPC(nameof(SyncLiveStartTimeRPC), RpcTarget.Others, trackIndex, livePlayStartTime, startOffset);
+                }
+
+                PlayClipDirect(clip, startOffset, title);
+            }
+            else
+            {
+                // Подхватываем текущую позицию воспроизведения
+                double timePassed = PhotonNetwork.Time - livePlayStartTime;
+                float targetOffset = (float)(timePassed + startOffset);
+                PlayStartTime = livePlayStartTime;
+                StartOffsetSeconds = startOffset;
+
+                if (targetOffset < clip.length)
+                {
+                    PlayClipDirect(clip, targetOffset, title);
+                }
+                else
+                {
+                    Plugin.Log.LogInfo($"[CustomBoombox] Track '{title}' already finished before download completed.");
+                }
+            }
+        }
+
+        private void PlayClipDirect(AudioClip clip, float targetOffset, string title)
+        {
             if (AudioSource != null)
             {
                 AudioSource.clip = clip;
@@ -872,6 +1040,135 @@ namespace WorkableBoombox.Items
             }
 
             BoomboxStateMemory.Save(this);
+        }
+
+        [PunRPC]
+        public void SyncLiveStartTimeRPC(int trackIndex, double liveStartTime, float startOffset, PhotonMessageInfo info = default)
+        {
+            if (CurrentTrackIndex == trackIndex)
+            {
+                livePlayStartTime = liveStartTime;
+                PlayStartTime = liveStartTime;
+                StartOffsetSeconds = startOffset;
+            }
+        }
+
+        [PunRPC]
+        public void ReportTrackReadyRPC(int actorNumber, int trackIndex, PhotonMessageInfo info = default)
+        {
+            if (!PhotonNetwork.IsMasterClient || CurrentTrackIndex != trackIndex)
+            {
+                return;
+            }
+
+            readyPlayerActors.Add(actorNumber);
+            int requiredPlayers = PhotonNetwork.CurrentRoom != null ? PhotonNetwork.CurrentRoom.PlayerCount : 1;
+
+            Plugin.Log.LogInfo($"[CustomBoombox] Player {actorNumber} ready ({readyPlayerActors.Count}/{requiredPlayers}) for track {trackIndex}");
+
+            if (readyPlayerActors.Count >= requiredPlayers)
+            {
+                if (syncWaitTimeoutCoroutine != null)
+                {
+                    StopCoroutine(syncWaitTimeoutCoroutine);
+                    syncWaitTimeoutCoroutine = null;
+                }
+
+                double scheduledStart = PhotonNetwork.Time + 0.35;
+                photonView.RPC(nameof(StartSynchronizedPlaybackRPC), RpcTarget.All, trackIndex, scheduledStart, StartOffsetSeconds);
+            }
+        }
+
+        [PunRPC]
+        public void StartSynchronizedPlaybackRPC(int trackIndex, double scheduledStart, float startOffset, PhotonMessageInfo info = default)
+        {
+            if (CurrentTrackIndex != trackIndex)
+            {
+                return;
+            }
+
+            if (clientWaitTimeoutCoroutine != null)
+            {
+                StopCoroutine(clientWaitTimeoutCoroutine);
+                clientWaitTimeoutCoroutine = null;
+            }
+
+            livePlayStartTime = scheduledStart;
+            PlayStartTime = scheduledStart;
+            StartOffsetSeconds = startOffset;
+
+            hasScheduledPlayback = true;
+            scheduledPlaybackTime = scheduledStart;
+            scheduledPlaybackOffset = startOffset;
+
+            if (pendingReadyClip != null && pendingReadyTrackIndex == trackIndex)
+            {
+                AudioClip readyClip = pendingReadyClip;
+                string readyTitle = pendingReadyTitle;
+                pendingReadyClip = null;
+                pendingReadyTrackIndex = -1;
+
+                if (scheduledPlaybackCoroutine != null)
+                {
+                    StopCoroutine(scheduledPlaybackCoroutine);
+                }
+                scheduledPlaybackCoroutine = StartCoroutine(WaitAndPlayScheduled(readyClip, scheduledStart, startOffset, readyTitle));
+            }
+        }
+
+        private IEnumerator WaitAndPlayScheduled(AudioClip clip, double scheduledStart, float startOffset, string title)
+        {
+            while (PhotonNetwork.Time < scheduledStart)
+            {
+                yield return null;
+            }
+
+            if (clip != null && IsPlaying)
+            {
+                double diff = PhotonNetwork.Time - scheduledStart;
+                float actualOffset = (float)(startOffset + Math.Max(0.0, diff));
+                PlayClipDirect(clip, actualOffset, title);
+            }
+
+            scheduledPlaybackCoroutine = null;
+        }
+
+        private IEnumerator WaitForAllTimeout(int trackIndex, float startOffset)
+        {
+            yield return new WaitForSeconds(12.0f);
+
+            if (PhotonNetwork.IsMasterClient && CurrentTrackIndex == trackIndex && IsPlaying)
+            {
+                int readyCount = readyPlayerActors.Count;
+                int totalCount = PhotonNetwork.CurrentRoom != null ? PhotonNetwork.CurrentRoom.PlayerCount : 1;
+                Plugin.Log.LogWarning($"[CustomBoombox] Sync timeout waiting for players ({readyCount}/{totalCount}). Starting playback now.");
+
+                double scheduledStart = PhotonNetwork.Time + 0.2;
+                photonView.RPC(nameof(StartSynchronizedPlaybackRPC), RpcTarget.All, trackIndex, scheduledStart, startOffset);
+            }
+
+            syncWaitTimeoutCoroutine = null;
+        }
+
+        private IEnumerator ClientWaitForStartFallback(int trackIndex)
+        {
+            yield return new WaitForSeconds(15.0f);
+
+            if (pendingReadyClip != null && pendingReadyTrackIndex == trackIndex && IsPlaying)
+            {
+                Plugin.Log.LogWarning($"[CustomBoombox] Client timeout waiting for host start signal. Starting playback locally.");
+                AudioClip readyClip = pendingReadyClip;
+                string readyTitle = pendingReadyTitle;
+                float readyOffset = pendingReadyOffset;
+                pendingReadyClip = null;
+                pendingReadyTrackIndex = -1;
+
+                PlayStartTime = PhotonNetwork.Time;
+                StartOffsetSeconds = readyOffset;
+                PlayClipDirect(readyClip, readyOffset, readyTitle);
+            }
+
+            clientWaitTimeoutCoroutine = null;
         }
 
         [PunRPC]
@@ -1008,10 +1305,20 @@ namespace WorkableBoombox.Items
                 AudioSource.time = finalTime;
                 PlayStartTime = PhotonNetwork.Time;
                 StartOffsetSeconds = finalTime;
+                livePlayStartTime = PhotonNetwork.Time - finalTime;
 
                 if (!AudioSource.isPlaying && IsPlaying)
                 {
                     AudioSource.Play();
+                }
+
+                if (pocketAudioSource != null && pocketAudioSource.clip != null && finalTime < pocketAudioSource.clip.length)
+                {
+                    pocketAudioSource.time = finalTime;
+                    if (!pocketAudioSource.isPlaying && IsPlaying)
+                    {
+                        pocketAudioSource.Play();
+                    }
                 }
 
                 BoomboxStateMemory.Save(this);

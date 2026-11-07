@@ -12,6 +12,7 @@ namespace WorkableBoombox.Config
         // Keybindings
         public static ConfigEntry<KeyCode> ToggleKey;
         public static ConfigEntry<KeyCode> NextTrackKey;
+        public static ConfigEntry<KeyCode> RestartTrackKey;
         public static ConfigEntry<KeyCode> LoopModeKey;
         public static ConfigEntry<KeyCode> ShuffleKey;
         public static ConfigEntry<KeyCode> VolumeKey;
@@ -34,6 +35,7 @@ namespace WorkableBoombox.Config
         // Playback Defaults
         public static ConfigEntry<int> DefaultLoopMode;
         public static ConfigEntry<bool> DefaultShuffle;
+        public static ConfigEntry<int> SyncMode;
 
         // Shop / Item Settings
         public static ConfigEntry<int> ShopPrice;
@@ -48,6 +50,7 @@ namespace WorkableBoombox.Config
             // Keybindings
             ToggleKey = config.Bind("Controls", "ToggleKey", KeyCode.E, "Toggle playback on/off key");
             NextTrackKey = config.Bind("Controls", "NextTrackKey", KeyCode.F, "Next track key ([Hold F] + Scroll to scrub time)");
+            RestartTrackKey = config.Bind("Controls", "RestartTrackKey", KeyCode.Z, "Restart current track key (00:00) / Перезапуск трека с начала");
             LoopModeKey = config.Bind("Controls", "LoopModeKey", KeyCode.R, "Cycle loop mode key (Off -> Playlist -> Single)");
             ShuffleKey = config.Bind("Controls", "ShuffleKey", KeyCode.T, "Toggle shuffle playback key");
             VolumeKey = config.Bind("Controls", "VolumeKey", KeyCode.V, "Volume key: [V] - Mute, [Hold V + Scroll] - Adjust volume");
@@ -70,6 +73,7 @@ namespace WorkableBoombox.Config
             // Playback Defaults
             DefaultLoopMode = config.Bind("Playback", "DefaultLoopMode", 1, "Default loop mode: 0 = Off (stops at end), 1 = Entire Playlist, 2 = Single Track");
             DefaultShuffle = config.Bind("Playback", "DefaultShuffle", true, "Whether to shuffle playlist tracks by default");
+            SyncMode = config.Bind("Playback", "SyncMode", 1, "Track synchronization mode: 0 = None (play immediately on download), 1 = LiveStream (broadcast time-code, catch up), 2 = WaitForAll (wait until all players download track) / Режим синхронизации воспроизведения");
 
             // Shop / Item
             ShopPrice = config.Bind("Shop", "ShopPrice", 15, "Purchase price of the boombox in the shop (default: 15)");

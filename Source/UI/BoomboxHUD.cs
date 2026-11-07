@@ -207,11 +207,12 @@ namespace WorkableBoombox.UI
                 string tKey = ModConfig.ShuffleKey.Value.ToString();
                 string vKey = ModConfig.VolumeKey.Value.ToString();
                 string pKey = ModConfig.PlaylistKey.Value.ToString();
+                string zKey = ModConfig.RestartTrackKey != null ? ModConfig.RestartTrackKey.Value.ToString() : "Z";
 
                 GUILayout.Label(BoomboxLocalization.PromptRow1(eKey, fKey, pKey), hotkeyStyle);
                 GUILayout.Label(BoomboxLocalization.PromptRow2(rKey, hoverLoopStatus, tKey, hoverShuffleStatus), subHotkeyStyle);
                 GUILayout.Label(BoomboxLocalization.PromptRow3(vKey, hoverVolumePercent, hoverIsMuted), subHotkeyStyle);
-                GUILayout.Label(BoomboxLocalization.PromptRow4(fKey), hotkeyStyle);
+                GUILayout.Label(BoomboxLocalization.PromptRow4(fKey, zKey), hotkeyStyle);
 
                 GUILayout.EndArea();
             }
