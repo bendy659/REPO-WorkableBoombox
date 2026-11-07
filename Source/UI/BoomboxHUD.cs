@@ -86,8 +86,8 @@ namespace WorkableBoombox.UI
             showTrackNotification = false;
         }
 
-        private static readonly System.Reflection.FieldInfo currentMenuPageField =
-            typeof(MenuManager).GetField("currentMenuPage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        private static readonly System.Reflection.FieldInfo currentMenuStateField =
+            typeof(MenuManager).GetField("currentMenuState", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
         public bool ShouldHideHUD()
         {
@@ -101,11 +101,12 @@ namespace WorkableBoombox.UI
                 return true;
             }
 
-            if (MenuManager.instance != null && currentMenuPageField != null)
+            if (MenuManager.instance != null && currentMenuStateField != null)
             {
                 try
                 {
-                    if (currentMenuPageField.GetValue(MenuManager.instance) != null)
+                    int state = (int)currentMenuStateField.GetValue(MenuManager.instance);
+                    if (state == 0) // 0 = MenuState.Open
                     {
                         return true;
                     }
