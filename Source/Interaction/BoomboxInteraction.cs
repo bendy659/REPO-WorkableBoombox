@@ -14,6 +14,8 @@ namespace WorkableBoombox.Interaction
         private const float MaxInteractionDistance = 4.0f;
 
         private CustomBoomboxItem currentTargetBoombox;
+        private Camera cachedCamera;
+        private static int raycastMask = -1;
         private bool isHoldingNextTrackKey;
         private bool didScrubDuringHold;
         private bool isHoldingVolumeKey;
@@ -72,13 +74,20 @@ namespace WorkableBoombox.Interaction
             }
 
             // 2. Если не держит в руках - ищем взглядом через Raycast
-            Camera cam = Camera.main;
-            if (cam != null)
+            if (cachedCamera == null || !cachedCamera.gameObject.activeInHierarchy)
             {
-                Ray ray = new Ray(cam.transform.position, cam.transform.forward);
-                int mask = ~LayerMask.GetMask("Ignore Raycast");
+                cachedCamera = Camera.main;
+            }
 
-                if (Physics.Raycast(ray, out RaycastHit hit, MaxInteractionDistance, mask, QueryTriggerInteraction.Ignore))
+            if (cachedCamera != null)
+            {
+                if (raycastMask == -1)
+                {
+                    raycastMask = ~LayerMask.GetMask("Ignore Raycast");
+                }
+
+                Ray ray = new Ray(cachedCamera.transform.position, cachedCamera.transform.forward);
+                if (Physics.Raycast(ray, out RaycastHit hit, MaxInteractionDistance, raycastMask, QueryTriggerInteraction.Ignore))
                 {
                     CustomBoomboxItem boombox = hit.collider.GetComponentInParent<CustomBoomboxItem>();
                     if (boombox != null)
@@ -110,8 +119,11 @@ namespace WorkableBoombox.Interaction
 
         private void SetTarget(CustomBoomboxItem boombox)
         {
-            currentTargetBoombox = boombox;
-            UpdateHUD();
+            if (currentTargetBoombox != boombox)
+            {
+                currentTargetBoombox = boombox;
+                UpdateHUD();
+            }
         }
 
         private void ClearTarget()
@@ -136,8 +148,6 @@ namespace WorkableBoombox.Interaction
             if (BoomboxHUD.Instance != null)
             {
                 string status;
-                int localCount = WorkableBoombox.Audio.BoomboxAudioManager.Instance != null ? WorkableBoombox.Audio.BoomboxAudioManager.Instance.LoadedTracks.Count : 0;
-
                 if (currentTargetBoombox.IsPlaying)
                 {
                     string trackFileName = currentTargetBoombox.GetCurrentTrackDisplayName();

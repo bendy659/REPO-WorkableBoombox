@@ -16,6 +16,20 @@ namespace WorkableBoombox.UI
         private int hoverVolumePercent = 100;
         private bool hoverIsMuted;
 
+        // Кэшированные строки подсказки для исключения аллокаций и фризов на OnGUI
+        private string cachedTitle = "BOOMBOX";
+        private float cachedBoxWidth = 460f;
+        private string cachedPromptRow1 = "";
+        private string cachedPromptRow2 = "";
+        private string cachedPromptRow3 = "";
+        private string cachedPromptRow4 = "";
+
+        private string lastStatus = null;
+        private string lastLoopStatus = null;
+        private string lastShuffleStatus = null;
+        private int lastVolumePercent = -1;
+        private bool lastIsMuted;
+
         private bool showVolumeNotification;
         private float volumeNotificationTimer;
         private string volumeNotificationText = "";
@@ -89,11 +103,53 @@ namespace WorkableBoombox.UI
         public void SetHoverPrompt(bool visible, string status = "", string loopStatus = "", string shuffleStatus = "", int volumePercent = 100, bool isMuted = false)
         {
             showHoverPrompt = visible;
-            hoverBoomboxStatus = status;
-            hoverLoopStatus = loopStatus;
-            hoverShuffleStatus = shuffleStatus;
-            hoverVolumePercent = volumePercent;
-            hoverIsMuted = isMuted;
+            if (!visible)
+            {
+                return;
+            }
+
+            // Обновляем форматирование строк только при изменении состояния (исключаем аллокации в OnGUI)
+            if (status != lastStatus || loopStatus != lastLoopStatus || shuffleStatus != lastShuffleStatus || volumePercent != lastVolumePercent || isMuted != lastIsMuted)
+            {
+                lastStatus = status;
+                lastLoopStatus = loopStatus;
+                lastShuffleStatus = shuffleStatus;
+                lastVolumePercent = volumePercent;
+                lastIsMuted = isMuted;
+
+                hoverBoomboxStatus = status;
+                hoverLoopStatus = loopStatus;
+                hoverShuffleStatus = shuffleStatus;
+                hoverVolumePercent = volumePercent;
+                hoverIsMuted = isMuted;
+
+                cachedTitle = string.IsNullOrEmpty(status)
+                    ? BoomboxLocalization.BoomboxTitle
+                    : $"{BoomboxLocalization.BoomboxTitle} ({status})";
+
+                string eKey = ModConfig.ToggleKey != null ? ModConfig.ToggleKey.Value.ToString() : "E";
+                string fKey = ModConfig.NextTrackKey != null ? ModConfig.NextTrackKey.Value.ToString() : "F";
+                string rKey = ModConfig.LoopModeKey != null ? ModConfig.LoopModeKey.Value.ToString() : "R";
+                string tKey = ModConfig.ShuffleKey != null ? ModConfig.ShuffleKey.Value.ToString() : "T";
+                string vKey = ModConfig.VolumeKey != null ? ModConfig.VolumeKey.Value.ToString() : "V";
+                string pKey = ModConfig.PlaylistKey != null ? ModConfig.PlaylistKey.Value.ToString() : "P";
+                string zKey = ModConfig.RestartTrackKey != null ? ModConfig.RestartTrackKey.Value.ToString() : "Z";
+
+                cachedPromptRow1 = BoomboxLocalization.PromptRow1(eKey, fKey, pKey);
+                cachedPromptRow2 = BoomboxLocalization.PromptRow2(rKey, loopStatus, tKey, shuffleStatus);
+                cachedPromptRow3 = BoomboxLocalization.PromptRow3(vKey, volumePercent, isMuted);
+                cachedPromptRow4 = BoomboxLocalization.PromptRow4(fKey, zKey);
+
+                if (titleStyle != null)
+                {
+                    float titleWidth = titleStyle.CalcSize(new GUIContent(cachedTitle)).x;
+                    cachedBoxWidth = Mathf.Max(460f, titleWidth + 30f);
+                }
+                else
+                {
+                    cachedBoxWidth = 460f;
+                }
+            }
         }
 
         public void ShowVolumeFeedback(int percent, bool muted)
@@ -131,15 +187,10 @@ namespace WorkableBoombox.UI
         {
             InitStyles();
 
-            // 1. Подсказка взаимодействия (рисуется первой как базовый слой)
+            // 1. Подсказка взаимодействия (рисуется чистыми GUI.Label без тяжелого GUILayout-паса)
             if (showHoverPrompt)
             {
-                string title = string.IsNullOrEmpty(hoverBoomboxStatus)
-                    ? BoomboxLocalization.BoomboxTitle
-                    : $"{BoomboxLocalization.BoomboxTitle} ({hoverBoomboxStatus})";
-
-                float titleWidth = titleStyle.CalcSize(new GUIContent(title)).x;
-                float boxWidth = Mathf.Max(460f, titleWidth + 30f);
+                float boxWidth = cachedBoxWidth;
                 float boxHeight = 138f;
 
                 float alignX = ModConfig.OverlayPositionX != null ? Mathf.Clamp01(ModConfig.OverlayPositionX.Value) : 0.5f;
@@ -157,24 +208,14 @@ namespace WorkableBoombox.UI
                 Rect boxRect = new Rect(boxX, boxY, boxWidth, boxHeight);
                 GUI.Box(boxRect, GUIContent.none, promptBoxStyle);
 
-                GUILayout.BeginArea(new Rect(boxX + 10f, boxY + 6f, boxWidth - 20f, boxHeight - 12f));
+                float innerX = boxX + 10f;
+                float innerW = boxWidth - 20f;
 
-                GUILayout.Label(title, titleStyle);
-
-                string eKey = ModConfig.ToggleKey.Value.ToString();
-                string fKey = ModConfig.NextTrackKey.Value.ToString();
-                string rKey = ModConfig.LoopModeKey.Value.ToString();
-                string tKey = ModConfig.ShuffleKey.Value.ToString();
-                string vKey = ModConfig.VolumeKey.Value.ToString();
-                string pKey = ModConfig.PlaylistKey.Value.ToString();
-                string zKey = ModConfig.RestartTrackKey != null ? ModConfig.RestartTrackKey.Value.ToString() : "Z";
-
-                GUILayout.Label(BoomboxLocalization.PromptRow1(eKey, fKey, pKey), hotkeyStyle);
-                GUILayout.Label(BoomboxLocalization.PromptRow2(rKey, hoverLoopStatus, tKey, hoverShuffleStatus), subHotkeyStyle);
-                GUILayout.Label(BoomboxLocalization.PromptRow3(vKey, hoverVolumePercent, hoverIsMuted), subHotkeyStyle);
-                GUILayout.Label(BoomboxLocalization.PromptRow4(fKey, zKey), hotkeyStyle);
-
-                GUILayout.EndArea();
+                GUI.Label(new Rect(innerX, boxY + 8f, innerW, 22f), cachedTitle, titleStyle);
+                GUI.Label(new Rect(innerX, boxY + 34f, innerW, 20f), cachedPromptRow1, hotkeyStyle);
+                GUI.Label(new Rect(innerX, boxY + 58f, innerW, 20f), cachedPromptRow2, subHotkeyStyle);
+                GUI.Label(new Rect(innerX, boxY + 82f, innerW, 20f), cachedPromptRow3, subHotkeyStyle);
+                GUI.Label(new Rect(innerX, boxY + 106f, innerW, 20f), cachedPromptRow4, hotkeyStyle);
             }
 
             // 2. Уведомление о перемотке (по центру экрана, над подсказкой взаимодействия)
@@ -227,7 +268,10 @@ namespace WorkableBoombox.UI
 
             promptBoxStyle = new GUIStyle(GUI.skin.box)
             {
-                normal = { background = backgroundTexture }
+                normal = { background = backgroundTexture },
+                border = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 0, 0),
+                padding = new RectOffset(0, 0, 0, 0)
             };
 
             titleStyle = new GUIStyle(GUI.skin.label)
@@ -277,6 +321,11 @@ namespace WorkableBoombox.UI
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = new Color(0.3f, 1.0f, 0.6f) }
             };
+
+            // Прогрев растрирования шрифтов offscreen для устранения фриза при первом наведении
+            GUI.Label(new Rect(-2000f, -2000f, 10f, 10f), "BOOMBOX Playing Off (Loading...) 1234567890%", titleStyle);
+            GUI.Label(new Rect(-2000f, -2000f, 10f, 10f), "[E] Play/Pause [F] Next Track [P] Playlists [Z] Restart", hotkeyStyle);
+            GUI.Label(new Rect(-2000f, -2000f, 10f, 10f), "[R] Loop: Playlist [T] Shuffle: On [V] Mute Scroll Volume (-/+ 5s)", subHotkeyStyle);
         }
 
         private static string FormatTime(float seconds)
