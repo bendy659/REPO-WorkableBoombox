@@ -19,7 +19,7 @@ namespace WorkableBoombox
     {
         public const string ModGUID = "com.bendy659.workableboombox";
         public const string ModName = "Workable Boombox";
-        public const string ModVersion = "1.2.1";
+        public const string ModVersion = "1.2.2";
 
         public static Plugin Instance { get; private set; }
         public static ManualLogSource Log { get; private set; }
