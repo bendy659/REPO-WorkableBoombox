@@ -143,8 +143,15 @@ namespace WorkableBoombox.Items
             if (Light1 == null || Light2 == null)
             {
                 Light[] allLights = GetComponentsInChildren<Light>(true);
-                if (allLights.Length > 0) Light1 = allLights[0];
-                if (allLights.Length > 1) Light2 = allLights[1];
+                if (allLights.Length > 0 && Light1 == null) Light1 = allLights[0];
+                if (allLights.Length > 1 && Light2 == null) Light2 = allLights[1];
+
+                if (Light1 != null && Light2 == null)
+                {
+                    GameObject lt2Obj = UnityEngine.Object.Instantiate(Light1.gameObject, transform);
+                    lt2Obj.name = "Boombox_Light2";
+                    Light2 = lt2Obj.GetComponent<Light>();
+                }
             }
 
             if (Speaker1 == null || Speaker2 == null)
@@ -1549,8 +1556,15 @@ namespace WorkableBoombox.Items
             if (Light1 == null || !Light1.transform.IsChildOf(transform) || Light2 == null || !Light2.transform.IsChildOf(transform))
             {
                 Light[] allLights = GetComponentsInChildren<Light>(true);
-                Light1 = allLights.Length > 0 ? allLights[0] : null;
-                Light2 = allLights.Length > 1 ? allLights[1] : null;
+                if (allLights.Length > 0 && (Light1 == null || !Light1.transform.IsChildOf(transform))) Light1 = allLights[0];
+                if (allLights.Length > 1 && (Light2 == null || !Light2.transform.IsChildOf(transform))) Light2 = allLights[1];
+
+                if (Light1 != null && (Light2 == null || !Light2.transform.IsChildOf(transform)))
+                {
+                    GameObject lt2Obj = UnityEngine.Object.Instantiate(Light1.gameObject, transform);
+                    lt2Obj.name = "Boombox_Light2";
+                    Light2 = lt2Obj.GetComponent<Light>();
+                }
             }
 
             if (Speaker1 == null || !Speaker1.IsChildOf(transform) || Speaker2 == null || !Speaker2.IsChildOf(transform))
@@ -1638,26 +1652,44 @@ namespace WorkableBoombox.Items
             // Восстанавливаем оригинальную яркость световых спотов бумбокса
             float lightIntensity = (3.5f + smoothedRMS * 8.0f) * brightness;
 
+            // Направление света строго вперед из обоих динамиков бумбокса с легким наклоном вниз к полу (-up * 0.18f)
+            Vector3 forwardDirection = (transform.forward - transform.up * 0.18f).normalized;
+            Quaternion forwardLightRot = Quaternion.LookRotation(forwardDirection, transform.up);
+
             if (Light1 != null)
             {
                 Light1.type = LightType.Spot;
                 Light1.shadows = LightShadows.None;
-                if (Light1.range < 6.0f) Light1.range = 6.0f;
-                if (Light1.spotAngle < 65f) Light1.spotAngle = 65f;
+                Light1.range = 7.0f;
+                Light1.spotAngle = 60f;
+                Light1.innerSpotAngle = 35f;
                 Light1.enabled = true;
                 Light1.color = glowColor;
                 Light1.intensity = Mathf.Lerp(Light1.intensity, lightIntensity, Time.deltaTime * 10f);
+
+                Light1.transform.rotation = forwardLightRot;
+                if (Speaker1 != null)
+                {
+                    Light1.transform.position = Speaker1.position + transform.forward * 0.06f;
+                }
             }
 
             if (Light2 != null)
             {
                 Light2.type = LightType.Spot;
                 Light2.shadows = LightShadows.None;
-                if (Light2.range < 6.0f) Light2.range = 6.0f;
-                if (Light2.spotAngle < 65f) Light2.spotAngle = 65f;
+                Light2.range = 7.0f;
+                Light2.spotAngle = 60f;
+                Light2.innerSpotAngle = 35f;
                 Light2.enabled = true;
                 Light2.color = glowColor;
                 Light2.intensity = Mathf.Lerp(Light2.intensity, lightIntensity, Time.deltaTime * 10f);
+
+                Light2.transform.rotation = forwardLightRot;
+                if (Speaker2 != null)
+                {
+                    Light2.transform.position = Speaker2.position + transform.forward * 0.06f;
+                }
             }
         }
 
@@ -1762,6 +1794,13 @@ namespace WorkableBoombox.Items
                 Light[] lights = pocketVisual.GetComponentsInChildren<Light>(true);
                 if (lights.Length > 0) pocketLight1 = lights[0];
                 if (lights.Length > 1) pocketLight2 = lights[1];
+
+                if (pocketLight1 != null && pocketLight2 == null)
+                {
+                    GameObject pLt2Obj = UnityEngine.Object.Instantiate(pocketLight1.gameObject, pocketVisual.transform);
+                    pLt2Obj.name = "PocketBoombox_Light2";
+                    pocketLight2 = pLt2Obj.GetComponent<Light>();
+                }
 
                 if (pocketLight1 != null) { pocketLight1.enabled = false; pocketLight1.intensity = 0f; }
                 if (pocketLight2 != null) { pocketLight2.enabled = false; pocketLight2.intensity = 0f; }
@@ -1893,6 +1932,49 @@ namespace WorkableBoombox.Items
             }
         }
 
+        public void OnUnequippedFromHotbar()
+        {
+            DisablePocketMode();
+
+            Transform vision = null;
+            if (SemiFunc.PlayerAvatarLocal() != null && SemiFunc.PlayerAvatarLocal().PlayerVisionTarget != null)
+            {
+                vision = SemiFunc.PlayerAvatarLocal().PlayerVisionTarget.VisionTransform;
+            }
+            Vector3 lookDir = vision != null ? vision.forward : (Camera.main != null ? Camera.main.transform.forward : transform.forward);
+            lookDir.y = 0f;
+            if (lookDir.sqrMagnitude > 0.001f)
+            {
+                Quaternion uprightRot = Quaternion.LookRotation(-lookDir.normalized, Vector3.up);
+                transform.rotation = uprightRot;
+                if (PhysGrabObject != null && PhysGrabObject.rb != null)
+                {
+                    PhysGrabObject.rb.rotation = uprightRot;
+                    PhysGrabObject.rb.angularVelocity = Vector3.zero;
+                    PhysGrabObject.rb.linearVelocity = Vector3.zero;
+                }
+            }
+
+            EnsureVisualReferences();
+
+            float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0.1f, 5f) : 1.0f;
+            if (IsPlaying && (ModConfig.EnableLightMusic == null || ModConfig.EnableLightMusic.Value))
+            {
+                if (Light1 != null)
+                {
+                    Light1.enabled = true;
+                    Light1.intensity = 3.5f * brightness;
+                }
+                if (Light2 != null)
+                {
+                    Light2.enabled = true;
+                    Light2.intensity = 3.5f * brightness;
+                }
+            }
+
+            AnimateVisuals();
+        }
+
         private void DisablePocketMode()
         {
             if (pocketVisual != null && pocketVisual.activeSelf)
@@ -1936,7 +2018,7 @@ namespace WorkableBoombox.Items
                     {
                         PhysGrabObject.rb.rotation = uprightRot;
                         PhysGrabObject.rb.angularVelocity = Vector3.zero;
-                        PhysGrabObject.rb.velocity = new Vector3(PhysGrabObject.rb.velocity.x * 0.2f, PhysGrabObject.rb.velocity.y, PhysGrabObject.rb.velocity.z * 0.2f);
+                        PhysGrabObject.rb.linearVelocity = new Vector3(PhysGrabObject.rb.linearVelocity.x * 0.2f, PhysGrabObject.rb.linearVelocity.y, PhysGrabObject.rb.linearVelocity.z * 0.2f);
                     }
                 }
             }
@@ -1981,8 +2063,16 @@ namespace WorkableBoombox.Items
             float brightness = ModConfig.LightMusicBrightness != null ? Mathf.Clamp(ModConfig.LightMusicBrightness.Value, 0.1f, 5f) : 1.0f;
             float pocketIntensity = (2.5f + smoothedRMS * 8.0f) * brightness;
 
+            Vector3 pocketFwd = (pocketVisual.transform.forward - pocketVisual.transform.up * 0.18f).normalized;
+            Quaternion pocketLightRot = Quaternion.LookRotation(pocketFwd, pocketVisual.transform.up);
+
             if (pocketLight1 != null)
             {
+                pocketLight1.type = LightType.Spot;
+                pocketLight1.range = 5.0f;
+                pocketLight1.spotAngle = 60f;
+                pocketLight1.transform.rotation = pocketLightRot;
+                if (pocketSpeaker1 != null) pocketLight1.transform.position = pocketSpeaker1.position + pocketVisual.transform.forward * 0.03f;
                 pocketLight1.enabled = true;
                 pocketLight1.color = glowColor;
                 pocketLight1.intensity = pocketIntensity;
@@ -1990,6 +2080,11 @@ namespace WorkableBoombox.Items
 
             if (pocketLight2 != null)
             {
+                pocketLight2.type = LightType.Spot;
+                pocketLight2.range = 5.0f;
+                pocketLight2.spotAngle = 60f;
+                pocketLight2.transform.rotation = pocketLightRot;
+                if (pocketSpeaker2 != null) pocketLight2.transform.position = pocketSpeaker2.position + pocketVisual.transform.forward * 0.03f;
                 pocketLight2.enabled = true;
                 pocketLight2.color = glowColor;
                 pocketLight2.intensity = pocketIntensity;

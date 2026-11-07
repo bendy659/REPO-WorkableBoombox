@@ -224,6 +224,14 @@ namespace WorkableBoombox.Items
                 Light lt1 = oldBoombox != null ? oldBoombox.light1 : null;
                 Light lt2 = oldBoombox != null ? oldBoombox.light2 : null;
 
+                // Если в оригинале был настроен только один источник света, дублируем его для второго динамика
+                if (lt1 != null && lt2 == null)
+                {
+                    GameObject lt2Obj = UnityEngine.Object.Instantiate(lt1.gameObject, customPrefab.transform);
+                    lt2Obj.name = "Boombox_Light2";
+                    lt2 = lt2Obj.GetComponent<Light>();
+                }
+
                 // Выключаем световые источники по умолчанию перед началом воспроизведения
                 if (lt1 != null)
                 {
