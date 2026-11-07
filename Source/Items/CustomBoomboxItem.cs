@@ -10,6 +10,7 @@ using WorkableBoombox.Config;
 using WorkableBoombox.Localization;
 using WorkableBoombox.Playlists;
 using WorkableBoombox.UI;
+using WorkableBoombox.Visuals;
 
 namespace WorkableBoombox.Items
 {
@@ -44,6 +45,8 @@ namespace WorkableBoombox.Items
         private Light pocketLight2;
         private Renderer pocketSpeakerRenderer1;
         private Renderer pocketSpeakerRenderer2;
+        private BoomboxDebugLightCone debugCone1;
+        private BoomboxDebugLightCone debugCone2;
         private float stateSaveInterval;
 
         private static readonly FieldInfo isEquippingField =
@@ -1567,6 +1570,45 @@ namespace WorkableBoombox.Items
                 }
             }
 
+            // Отвязываем источники света от сабвуферов, чтобы динамический скейлинг динамиков не деформировал свет
+            if (Light1 != null)
+            {
+                if (Light1.transform.parent != transform)
+                {
+                    Light1.transform.SetParent(transform, true);
+                }
+                Light1.transform.localScale = Vector3.one;
+
+                if (debugCone1 == null)
+                {
+                    debugCone1 = Light1.GetComponent<BoomboxDebugLightCone>();
+                    if (debugCone1 == null)
+                    {
+                        debugCone1 = Light1.gameObject.AddComponent<BoomboxDebugLightCone>();
+                        debugCone1.Initialize(Light1);
+                    }
+                }
+            }
+
+            if (Light2 != null)
+            {
+                if (Light2.transform.parent != transform)
+                {
+                    Light2.transform.SetParent(transform, true);
+                }
+                Light2.transform.localScale = Vector3.one;
+
+                if (debugCone2 == null)
+                {
+                    debugCone2 = Light2.GetComponent<BoomboxDebugLightCone>();
+                    if (debugCone2 == null)
+                    {
+                        debugCone2 = Light2.gameObject.AddComponent<BoomboxDebugLightCone>();
+                        debugCone2.Initialize(Light2);
+                    }
+                }
+            }
+
             if (Speaker1 == null || !Speaker1.IsChildOf(transform) || Speaker2 == null || !Speaker2.IsChildOf(transform))
             {
                 Speaker1 = null;
@@ -1629,6 +1671,8 @@ namespace WorkableBoombox.Items
                 if (Light2 != null && Light2.enabled) { Light2.intensity = 0f; Light2.enabled = false; }
                 if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null) SpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
                 if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null) SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+                if (debugCone1 != null) debugCone1.UpdateVisuals(Color.black, 0f, 0f, false);
+                if (debugCone2 != null) debugCone2.UpdateVisuals(Color.black, 0f, 0f, false);
                 return;
             }
 
@@ -1652,25 +1696,35 @@ namespace WorkableBoombox.Items
             // Восстанавливаем оригинальную яркость световых спотов бумбокса
             float lightIntensity = (3.5f + smoothedRMS * 8.0f) * brightness;
 
+            float targetSpotAngle = ModConfig.SpotLightAngle != null ? Mathf.Clamp(ModConfig.SpotLightAngle.Value, 30f, 130f) : 85f;
+            float targetRange = ModConfig.SpotLightRange != null ? Mathf.Clamp(ModConfig.SpotLightRange.Value, 3f, 25f) : 10.0f;
+            float innerAngle = Mathf.Max(20f, targetSpotAngle - 30f);
+
             // Направление света строго вперед из обоих динамиков бумбокса с легким наклоном вниз к полу (-up * 0.18f)
             Vector3 forwardDirection = (transform.forward - transform.up * 0.18f).normalized;
             Quaternion forwardLightRot = Quaternion.LookRotation(forwardDirection, transform.up);
+
+            // Выносим лампы на 0.16m вперед от динамика в свободный воздух, чтобы расширение сабвуфера при басах никогда не заглатывало источник света
+            float forwardOffset = 0.16f;
 
             if (Light1 != null)
             {
                 Light1.type = LightType.Spot;
                 Light1.shadows = LightShadows.None;
-                Light1.range = 7.0f;
-                Light1.spotAngle = 60f;
-                Light1.innerSpotAngle = 35f;
+                Light1.range = targetRange;
+                Light1.spotAngle = targetSpotAngle;
+                Light1.innerSpotAngle = innerAngle;
                 Light1.enabled = true;
                 Light1.color = glowColor;
                 Light1.intensity = Mathf.Lerp(Light1.intensity, lightIntensity, Time.deltaTime * 10f);
 
                 Light1.transform.rotation = forwardLightRot;
-                if (Speaker1 != null)
+                Vector3 basePos = Speaker1 != null ? Speaker1.position : transform.position;
+                Light1.transform.position = basePos + transform.forward * forwardOffset;
+
+                if (debugCone1 != null)
                 {
-                    Light1.transform.position = Speaker1.position + transform.forward * 0.06f;
+                    debugCone1.UpdateVisuals(glowColor, targetSpotAngle, targetRange, true);
                 }
             }
 
@@ -1678,17 +1732,20 @@ namespace WorkableBoombox.Items
             {
                 Light2.type = LightType.Spot;
                 Light2.shadows = LightShadows.None;
-                Light2.range = 7.0f;
-                Light2.spotAngle = 60f;
-                Light2.innerSpotAngle = 35f;
+                Light2.range = targetRange;
+                Light2.spotAngle = targetSpotAngle;
+                Light2.innerSpotAngle = innerAngle;
                 Light2.enabled = true;
                 Light2.color = glowColor;
                 Light2.intensity = Mathf.Lerp(Light2.intensity, lightIntensity, Time.deltaTime * 10f);
 
                 Light2.transform.rotation = forwardLightRot;
-                if (Speaker2 != null)
+                Vector3 basePos = Speaker2 != null ? Speaker2.position : transform.position;
+                Light2.transform.position = basePos + transform.forward * forwardOffset;
+
+                if (debugCone2 != null)
                 {
-                    Light2.transform.position = Speaker2.position + transform.forward * 0.06f;
+                    debugCone2.UpdateVisuals(glowColor, targetSpotAngle, targetRange, true);
                 }
             }
         }
@@ -1758,6 +1815,9 @@ namespace WorkableBoombox.Items
             {
                 SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
             }
+
+            if (debugCone1 != null) debugCone1.UpdateVisuals(Color.black, 0f, 0f, false);
+            if (debugCone2 != null) debugCone2.UpdateVisuals(Color.black, 0f, 0f, false);
         }
 
         private void InitPocketVisual()
@@ -1894,6 +1954,8 @@ namespace WorkableBoombox.Items
                 if (Light2 != null && Light2.enabled) { Light2.enabled = false; Light2.intensity = 0f; }
                 if (SpeakerRenderer1 != null && SpeakerRenderer1.material != null) SpeakerRenderer1.material.SetColor("_EmissionColor", Color.black);
                 if (SpeakerRenderer2 != null && SpeakerRenderer2.material != null) SpeakerRenderer2.material.SetColor("_EmissionColor", Color.black);
+                if (debugCone1 != null) debugCone1.UpdateVisuals(Color.black, 0f, 0f, false);
+                if (debugCone2 != null) debugCone2.UpdateVisuals(Color.black, 0f, 0f, false);
 
                 if (pocketAudioSource != null)
                 {
