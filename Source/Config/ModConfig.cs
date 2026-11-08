@@ -68,8 +68,8 @@ namespace WorkableBoombox.Config
             EnableVisualPulsing = config.Bind("Visuals", "EnableVisualPulsing", true, "Enable boombox speakers and body pulsing to the music beat");
             EnableLightMusic = config.Bind("Visuals", "EnableLightMusic", true, "Enable boombox disco lighting and speaker glow / Свето-музыка");
             LightMusicBrightness = config.Bind("Visuals", "LightMusicBrightness", 1.0f, "Brightness multiplier for disco lights and speaker glow (0.0 to 2.0, default: 1.0) / Яркость свето-музыки");
-            SpotLightAngle = config.Bind("Visuals", "SpotLightAngle", 85f, "Spotlight beam cone angle in degrees (30 to 130, default: 85) / Угол конуса световых спотлайтов");
-            SpotLightRange = config.Bind("Visuals", "SpotLightRange", 10.0f, "Spotlight beam range in meters (3 to 25, default: 10.0) / Дальность световых спотлайтов");
+            SpotLightAngle = config.Bind("Visuals", "SpotLightAngle", 110f, "Spotlight beam cone angle in degrees (30 to 150, default: 110) / Угол конуса световых спотлайтов");
+            SpotLightRange = config.Bind("Visuals", "SpotLightRange", 16.0f, "Spotlight beam range in meters (3 to 30, default: 16.0) / Дальность световых спотлайтов");
             EnableDebugLightCones = config.Bind("Visuals", "EnableDebugLightCones", true, "Show visual 3D debug light cones for boombox spotlights / Отображение видимого 3D дебаг-конуса для спотлайтов");
 
             // UI & Overlay

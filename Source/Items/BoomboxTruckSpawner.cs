@@ -135,30 +135,14 @@ namespace WorkableBoombox.Items
         {
             rotation = Quaternion.identity;
 
-            // 1. Приоритет: точка спавна игроков внутри грузовика
-            TruckSafetySpawnPoint sp = TruckSafetySpawnPoint.instance ?? UnityEngine.Object.FindObjectOfType<TruckSafetySpawnPoint>();
-            if (sp != null)
-            {
-                rotation = sp.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
-                return sp.transform.position + Vector3.up * 0.25f;
-            }
-
-            // 2. Дверь грузовика
-            TruckDoor door = UnityEngine.Object.FindObjectOfType<TruckDoor>();
-            if (door != null)
-            {
-                rotation = door.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
-                return door.transform.position + door.transform.forward * 1.5f + Vector3.up * 0.25f;
-            }
-
-            // 3. Запасной вариант: платформа эвакуации
+            // 1. Приоритет: платформа эвакуации (паллет в кузове грузовика)
             ExtractionPoint ext = UnityEngine.Object.FindObjectOfType<ExtractionPoint>();
             if (ext != null)
             {
                 if (ext.platform != null)
                 {
                     rotation = ext.platform.rotation * Quaternion.Euler(0f, 180f, 0f);
-                    // Спавним прямо на поверхность платформы (0.08f над центроидом), исключая зависание в воздухе на клиентах
+                    // Спавним прямо на поверхность платформы (0.08f над центроидом)
                     return ext.platform.position + ext.platform.up * 0.08f + ext.platform.right * 0.85f;
                 }
                 if (ext.safetySpawn != null)
@@ -166,6 +150,32 @@ namespace WorkableBoombox.Items
                     rotation = ext.safetySpawn.rotation * Quaternion.Euler(0f, 180f, 0f);
                     return ext.safetySpawn.position + Vector3.up * 0.08f + ext.safetySpawn.right * 0.6f;
                 }
+            }
+
+            // 2. Запасной вариант: точка спавна игроков внутри грузовика с проверкой пола лучом
+            TruckSafetySpawnPoint sp = TruckSafetySpawnPoint.instance ?? UnityEngine.Object.FindObjectOfType<TruckSafetySpawnPoint>();
+            if (sp != null)
+            {
+                rotation = sp.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                Vector3 origin = sp.transform.position + Vector3.up * 0.5f;
+                if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 4.0f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    return hit.point + Vector3.up * 0.06f;
+                }
+                return sp.transform.position + Vector3.up * 0.06f;
+            }
+
+            // 3. Запасной вариант: дверь грузовика
+            TruckDoor door = UnityEngine.Object.FindObjectOfType<TruckDoor>();
+            if (door != null)
+            {
+                rotation = door.transform.rotation * Quaternion.Euler(0f, 180f, 0f);
+                Vector3 origin = door.transform.position + door.transform.forward * 1.5f + Vector3.up * 0.5f;
+                if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 4.0f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    return hit.point + Vector3.up * 0.06f;
+                }
+                return door.transform.position + door.transform.forward * 1.5f + Vector3.up * 0.06f;
             }
 
             return null;

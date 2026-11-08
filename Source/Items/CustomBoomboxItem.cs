@@ -53,6 +53,41 @@ namespace WorkableBoombox.Items
             typeof(ItemEquippable).GetField("isEquipping", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo isUnequippingField =
             typeof(ItemEquippable).GetField("isUnequipping", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo levelAnimationCompletedField =
+            typeof(LoadingUI).GetField("levelAnimationCompleted", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+        public static bool IsLevelLoading()
+        {
+            if (SemiFunc.IsMainMenu() || SemiFunc.RunIsLobbyMenu())
+            {
+                return true;
+            }
+
+            if (LoadingUI.instance != null)
+            {
+                if (LoadingUI.instance.gameObject.activeInHierarchy)
+                {
+                    return true;
+                }
+
+                if (levelAnimationCompletedField != null)
+                {
+                    try
+                    {
+                        bool completed = (bool)levelAnimationCompletedField.GetValue(LoadingUI.instance);
+                        if (!completed) return true;
+                    }
+                    catch { }
+                }
+            }
+
+            if (!SemiFunc.LevelGenDone())
+            {
+                return true;
+            }
+
+            return false;
+        }
 
         // State
         public bool IsPlaying { get; private set; }
@@ -235,6 +270,12 @@ namespace WorkableBoombox.Items
                 yield return new WaitForSeconds(0.2f);
             }
 
+            // Ждем завершения генерации уровня и исчезновения экрана загрузки
+            while (IsLevelLoading())
+            {
+                yield return new WaitForSeconds(0.2f);
+            }
+
             if (BoomboxStateMemory.HasSavedState)
             {
                 bool isMasterOrOwner = PhotonNetwork.IsMasterClient || photonView.IsMine || !SemiFunc.IsMultiplayer();
@@ -413,6 +454,20 @@ namespace WorkableBoombox.Items
                     stateSaveInterval = 0f;
                     BoomboxStateMemory.SavedTime = GetCurrentPlaybackTime();
                 }
+            }
+
+            // Во время экрана загрузки ("ЗАГРУЗКА" / генерация уровня) звук бумбокса полностью глушится
+            if (IsLevelLoading())
+            {
+                if (AudioSource != null && AudioSource.isPlaying)
+                {
+                    AudioSource.volume = 0f;
+                }
+                if (pocketAudioSource != null && pocketAudioSource.isPlaying)
+                {
+                    pocketAudioSource.volume = 0f;
+                }
+                return;
             }
 
             // Обработка нахождения в инвентаре/кармане
@@ -1283,7 +1338,9 @@ namespace WorkableBoombox.Items
                 ShuffleEnabled,
                 IsPlaylistMode,
                 ActivePlaylistOwner ?? "",
-                ActivePlaylistName ?? ""
+                ActivePlaylistName ?? "",
+                transform.position,
+                transform.rotation
             );
         }
 
@@ -1299,8 +1356,19 @@ namespace WorkableBoombox.Items
             bool isPlaylist,
             string plOwner,
             string plName,
+            Vector3 hostPos,
+            Quaternion hostRot,
             PhotonMessageInfo info = default)
         {
+            // Синхронизируем положение в пространстве, если бумбокс на клиенте не находится в руках
+            if (!IsBoomboxInPocket() && PhysGrabObject != null && !PhysGrabObject.grabbed)
+            {
+                if (hostPos.sqrMagnitude > 0.001f)
+                {
+                    PhysGrabObject.Teleport(hostPos, hostRot);
+                }
+            }
+
             CurrentVolume = Mathf.Clamp01(volume);
             IsMuted = muted;
             ApplyLocalVolume(CurrentVolume, IsMuted);
@@ -1578,6 +1646,8 @@ namespace WorkableBoombox.Items
                     Light1.transform.SetParent(transform, true);
                 }
                 Light1.transform.localScale = Vector3.one;
+                Light1.renderMode = LightRenderMode.ForcePixel;
+                Light1.shadows = LightShadows.None;
 
                 if (debugCone1 == null)
                 {
@@ -1597,6 +1667,8 @@ namespace WorkableBoombox.Items
                     Light2.transform.SetParent(transform, true);
                 }
                 Light2.transform.localScale = Vector3.one;
+                Light2.renderMode = LightRenderMode.ForcePixel;
+                Light2.shadows = LightShadows.None;
 
                 if (debugCone2 == null)
                 {
@@ -1677,16 +1749,15 @@ namespace WorkableBoombox.Items
             bool pulseEnabled = ModConfig.EnableVisualPulsing != null && ModConfig.EnableVisualPulsing.Value;
             if (pulseEnabled && !IsEquipTransitioning())
             {
-                // Динамический рескейл динамиков от реального звука
-                float speakerScale = 1f + smoothedRMS * 0.55f;
+                // Аккуратный скейл динамиков под бас (не раздуваем геометрию слишком сильно)
+                float speakerScale = 1f + smoothedRMS * 0.20f;
                 Vector3 targetSpeakerScale = new Vector3(speakerScale, speakerScale, speakerScale);
 
                 if (Speaker1 != null) Speaker1.localScale = targetSpeakerScale;
                 if (Speaker2 != null) Speaker2.localScale = targetSpeakerScale;
 
-                // Легкий рескейл самого корпуса бумбокса от баса
-                float bodyPulse = 1f + smoothedRMS * 0.10f;
-                transform.localScale = initialBodyScale * bodyPulse;
+                // Не деформируем сам Rigidbody корпус, чтобы не вызывать скачки коллизий и дерганье света
+                if (transform.localScale != initialBodyScale) transform.localScale = initialBodyScale;
             }
             else if (!IsEquipTransitioning())
             {
@@ -1725,31 +1796,33 @@ namespace WorkableBoombox.Items
                 SpeakerRenderer2.material.SetColor("_EmissionColor", glowColor * emissionMult);
             }
 
-            // Восстанавливаем оригинальную яркость световых спотов бумбокса
-            float lightIntensity = (3.5f + smoothedRMS * 8.0f) * brightness;
+            // Стабильная, яркая светомузыка: базовая яркость 4.0f всегда освещает комнату,
+            // а пульсация от RMS лишь слегка усиливает свет без мерцания и затухания в ноль
+            float targetIntensity = (4.0f + smoothedRMS * 3.0f) * brightness;
 
-            float targetSpotAngle = ModConfig.SpotLightAngle != null ? Mathf.Clamp(ModConfig.SpotLightAngle.Value, 30f, 130f) : 85f;
-            float targetRange = ModConfig.SpotLightRange != null ? Mathf.Clamp(ModConfig.SpotLightRange.Value, 3f, 25f) : 10.0f;
-            float innerAngle = Mathf.Max(20f, targetSpotAngle - 30f);
+            float targetSpotAngle = ModConfig.SpotLightAngle != null ? Mathf.Clamp(ModConfig.SpotLightAngle.Value, 30f, 150f) : 110f;
+            float targetRange = ModConfig.SpotLightRange != null ? Mathf.Clamp(ModConfig.SpotLightRange.Value, 3f, 30f) : 16.0f;
+            float innerAngle = Mathf.Max(20f, targetSpotAngle - 25f);
 
             // Направление света строго вперед из лицевой панели динамиков с легким наклоном вниз (-up * 0.15f)
             Vector3 frontFwd = GetFrontFacingDirection();
             Vector3 forwardDirection = (frontFwd - transform.up * 0.15f).normalized;
             Quaternion forwardLightRot = Quaternion.LookRotation(forwardDirection, transform.up);
 
-            // Выносим лампы на 0.15m вперед от динамика в свободный воздух
-            float forwardOffset = 0.15f;
+            // Выносим лампы на безопасные 0.35m вперед от динамика, чтобы даже при масштабировании динамика свет не оказывался внутри геометрии
+            float forwardOffset = 0.35f;
 
             if (Light1 != null)
             {
                 Light1.type = LightType.Spot;
+                Light1.renderMode = LightRenderMode.ForcePixel;
                 Light1.shadows = LightShadows.None;
                 Light1.range = targetRange;
                 Light1.spotAngle = targetSpotAngle;
                 Light1.innerSpotAngle = innerAngle;
                 Light1.enabled = true;
                 Light1.color = glowColor;
-                Light1.intensity = Mathf.Lerp(Light1.intensity, lightIntensity, Time.deltaTime * 10f);
+                Light1.intensity = targetIntensity;
 
                 Light1.transform.rotation = forwardLightRot;
                 Vector3 basePos = Speaker1 != null ? Speaker1.position : (transform.position + frontFwd * 0.2f);
@@ -1764,13 +1837,14 @@ namespace WorkableBoombox.Items
             if (Light2 != null)
             {
                 Light2.type = LightType.Spot;
+                Light2.renderMode = LightRenderMode.ForcePixel;
                 Light2.shadows = LightShadows.None;
                 Light2.range = targetRange;
                 Light2.spotAngle = targetSpotAngle;
                 Light2.innerSpotAngle = innerAngle;
                 Light2.enabled = true;
                 Light2.color = glowColor;
-                Light2.intensity = Mathf.Lerp(Light2.intensity, lightIntensity, Time.deltaTime * 10f);
+                Light2.intensity = targetIntensity;
 
                 Light2.transform.rotation = forwardLightRot;
                 Vector3 basePos = Speaker2 != null ? Speaker2.position : (transform.position + frontFwd * 0.2f);
@@ -2058,12 +2132,12 @@ namespace WorkableBoombox.Items
                 if (Light1 != null)
                 {
                     Light1.enabled = true;
-                    Light1.intensity = 3.5f * brightness;
+                    Light1.intensity = 4.0f * brightness;
                 }
                 if (Light2 != null)
                 {
                     Light2.enabled = true;
-                    Light2.intensity = 3.5f * brightness;
+                    Light2.intensity = 4.0f * brightness;
                 }
             }
 
@@ -2126,12 +2200,12 @@ namespace WorkableBoombox.Items
                 if (Light1 != null)
                 {
                     Light1.enabled = true;
-                    if (Light1.intensity < 1f) Light1.intensity = 3.5f * brightness;
+                    if (Light1.intensity < 1f) Light1.intensity = 4.0f * brightness;
                 }
                 if (Light2 != null)
                 {
                     Light2.enabled = true;
-                    if (Light2.intensity < 1f) Light2.intensity = 3.5f * brightness;
+                    if (Light2.intensity < 1f) Light2.intensity = 4.0f * brightness;
                 }
             }
         }
